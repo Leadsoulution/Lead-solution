@@ -1,0 +1,5 @@
+{
+  "name": "OrderSync Dashboard",
+  "description": "A SaaS dashboard to connect with WordPress (WooCommerce) and Shopify to manage orders, update statuses, send WhatsApp notifications, and view sales statistics.",
+  "requestFramePermissions": []
+}

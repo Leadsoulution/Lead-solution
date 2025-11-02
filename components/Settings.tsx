@@ -1,0 +1,287 @@
+import React, { useState } from 'react';
+import { Power, PowerOff, CheckCircle, XCircle, Save, RefreshCw, ChevronDown } from 'lucide-react';
+import { Statut, Ramassage, Livraison, Remboursement, CommandeRetour, ColorCategory, MessageCategory, AllMessageTemplates } from '../types';
+import { useCustomization } from '../contexts/CustomizationContext';
+
+const ColorSettingsSection: React.FC<{
+  title: string;
+  category: ColorCategory;
+  options: object;
+}> = ({ title, category, options }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const { colors, setAllColors } = useCustomization();
+  
+  const handleColorChange = (option: string, color: string) => {
+    setAllColors(prevColors => ({
+      ...prevColors,
+      [category]: {
+        ...prevColors[category],
+        [option]: color,
+      }
+    }));
+  };
+
+  return (
+    <div className="border-b dark:border-gray-700 last:border-b-0 py-2">
+      <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center py-2 font-semibold text-lg hover:bg-accent dark:hover:bg-dark-accent/50 rounded-md px-2">
+        <span>{title}</span>
+        <ChevronDown size={20} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+         <div className="pt-4 pb-2 px-2 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+            {Object.values(options).map((option) => (
+              <div key={option} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-5 h-5 rounded-full border dark:border-gray-600" style={{ backgroundColor: colors[category][option as keyof typeof colors[typeof category]] }}></div>
+                  <span className="text-sm font-medium">{option}</span>
+                </div>
+                <input 
+                  type="color"
+                  value={colors[category][option as keyof typeof colors[typeof category]]}
+                  onChange={(e) => handleColorChange(option, e.target.value)}
+                  className="w-10 h-10 p-0 border-none rounded-md cursor-pointer bg-transparent"
+                  style={{'--tw-ring-color': colors[category][option as keyof typeof colors[typeof category]] } as React.CSSProperties}
+                />
+              </div>
+            ))}
+         </div>
+      )}
+    </div>
+  );
+};
+
+const MessageSettingsSection: React.FC<{
+  title: string;
+  category: MessageCategory;
+  options: object;
+}> = ({ title, category, options }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const { messageTemplates, setMessageTemplates } = useCustomization();
+
+  const handleTemplateChange = (status: string, value: string) => {
+    setMessageTemplates(prev => {
+      const newCategoryTemplates = { ...prev[category] };
+      // FIX: Cast to `any` to allow string indexing on a union of record types. This resolves the issue where TypeScript infers the property as `never`.
+      (newCategoryTemplates as any)[status] = {
+        ...(newCategoryTemplates as any)[status],
+        template: value
+      };
+      return {
+        ...prev,
+        [category]: newCategoryTemplates
+      };
+    });
+  };
+
+  const handleToggleEnabled = (status: string) => {
+    setMessageTemplates(prev => {
+      const newCategoryTemplates = { ...prev[category] };
+      // FIX: Cast to `any` to allow string indexing on a union of record types. This resolves the issue where TypeScript infers the property as `never`.
+      const currentTemplate = (newCategoryTemplates as any)[status];
+      (newCategoryTemplates as any)[status] = {
+        ...currentTemplate,
+        enabled: !currentTemplate.enabled
+      };
+      return {
+        ...prev,
+        [category]: newCategoryTemplates
+      };
+    });
+  };
+
+  return (
+     <div className="border-b dark:border-gray-700 last:border-b-0 py-2">
+        <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center py-2 font-semibold text-lg hover:bg-accent dark:hover:bg-dark-accent/50 rounded-md px-2">
+            <span>{title}</span>
+            <ChevronDown size={20} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {isOpen && (
+            <div className="pt-4 pb-2 px-2 space-y-6">
+                {Object.values(options).map(status => {
+                    // FIX: Cast to `any` to allow string indexing on a union of record types. This resolves the issue where TypeScript infers the property as `never`.
+                    const messageConfig = (messageTemplates[category] as any)[status];
+                    if (!messageConfig) return null;
+                    const isEnabled = messageConfig.enabled;
+
+                    return (
+                        <div key={status}>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">{status}</label>
+                                <button
+                                    onClick={() => handleToggleEnabled(status)}
+                                    title={isEnabled ? 'Désactiver' : 'Activer'}
+                                    className={`p-1.5 rounded-md transition-colors ${isEnabled ? 'text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50' : 'text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50'}`}
+                                >
+                                    {isEnabled ? <Power size={18} /> : <PowerOff size={18} />}
+                                </button>
+                            </div>
+                            <textarea
+                                value={messageConfig.template}
+                                onChange={(e) => handleTemplateChange(status, e.target.value)}
+                                rows={2}
+                                disabled={!isEnabled}
+                                className="w-full p-2 border rounded-md bg-transparent focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50 disabled:bg-muted/50 dark:disabled:bg-dark-muted/50 transition-opacity"
+                            />
+                        </div>
+                    );
+                })}
+            </div>
+        )}
+     </div>
+  );
+};
+
+
+const Settings: React.FC = () => {
+  const [isShopifyConnected, setIsShopifyConnected] = useState(false);
+  const [isWooConnected, setIsWooConnected] = useState(false);
+  const { saveColors, resetColors, saveMessageTemplates, resetMessageTemplates } = useCustomization();
+
+  const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
+  const [showColorSaveConfirmation, setShowColorSaveConfirmation] = useState(false);
+
+
+  React.useEffect(() => {
+    setIsShopifyConnected(localStorage.getItem('shopifyConnected') === 'true');
+    setIsWooConnected(localStorage.getItem('wooConnected') === 'true');
+  }, []);
+
+  const toggleConnection = (platform: 'shopify' | 'woo') => {
+    if (platform === 'shopify') {
+      const newState = !isShopifyConnected;
+      setIsShopifyConnected(newState);
+      localStorage.setItem('shopifyConnected', String(newState));
+    } else {
+      const newState = !isWooConnected;
+      setIsWooConnected(newState);
+      localStorage.setItem('wooConnected', String(newState));
+    }
+  };
+
+  const handleSaveTemplates = () => {
+    saveMessageTemplates();
+    setShowSaveConfirmation(true);
+    setTimeout(() => setShowSaveConfirmation(false), 2000);
+  };
+  
+  const handleSaveColors = () => {
+    saveColors();
+    setShowColorSaveConfirmation(true);
+    setTimeout(() => setShowColorSaveConfirmation(false), 2000);
+  }
+
+  const PlatformCard: React.FC<{
+    name: string;
+    description: string;
+    isConnected: boolean;
+    onToggle: () => void;
+    logo: string;
+  }> = ({ name, description, isConnected, onToggle, logo }) => (
+    <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground flex flex-col md:flex-row items-center justify-between">
+      <div className="flex items-center gap-4">
+        <img src={logo} alt={`${name} logo`} className="h-12 w-12" />
+        <div>
+          <h3 className="text-xl font-semibold">{name}</h3>
+          <p className="text-muted-foreground dark:text-dark-muted-foreground">{description}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-4 mt-4 md:mt-0">
+        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
+          {isConnected ? <CheckCircle size={16} /> : <XCircle size={16} />}
+          <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
+        </div>
+        <button
+          onClick={onToggle}
+          className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold text-white ${
+            isConnected
+              ? 'bg-red-500 hover:bg-red-600'
+              : 'bg-blue-500 hover:bg-blue-600'
+          }`}
+        >
+          {isConnected ? <PowerOff size={16} /> : <Power size={16} />}
+          {isConnected ? 'Disconnect' : 'Connect'}
+        </button>
+      </div>
+    </div>
+  );
+  
+  return (
+    <div className="space-y-8 max-w-4xl mx-auto">
+      <div>
+          <h1 className="text-3xl font-bold">Settings</h1>
+          <p className="text-muted-foreground">Gérez vos connexions, personnalisez les messages et les couleurs.</p>
+      </div>
+      
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Connexions</h2>
+        <PlatformCard
+          name="Shopify"
+          description="Connect your Shopify store to sync orders."
+          isConnected={isShopifyConnected}
+          onToggle={() => toggleConnection('shopify')}
+          logo="https://cdn.worldvectorlogo.com/logos/shopify.svg"
+        />
+        <PlatformCard
+          name="WooCommerce"
+          description="Connect your WordPress store to sync orders."
+          isConnected={isWooConnected}
+          onToggle={() => toggleConnection('woo')}
+          logo="https://cdn.worldvectorlogo.com/logos/woocommerce-logo.svg"
+        />
+      </div>
+
+       <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Configuration des Couleurs</h2>
+         <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
+             <ColorSettingsSection title="Confirmation" category="statut" options={Statut} />
+             <ColorSettingsSection title="Ramassage" category="ramassage" options={Ramassage} />
+             <ColorSettingsSection title="Livraison" category="livraison" options={Livraison} />
+             <ColorSettingsSection title="Remboursement" category="remboursement" options={Remboursement} />
+             <ColorSettingsSection title="Commande retour" category="commandeRetour" options={CommandeRetour} />
+             
+             <div className="flex justify-end items-center mt-6 gap-4">
+                {showColorSaveConfirmation && <span className="text-sm text-green-600">Couleurs sauvegardées !</span>}
+                <button onClick={resetColors} className="px-4 py-2 rounded-md flex items-center gap-2 font-semibold text-sm border hover:bg-accent dark:hover:bg-dark-accent">
+                    <RefreshCw size={14} />
+                    Réinitialiser
+                </button>
+                <button onClick={handleSaveColors} className="px-4 py-2 rounded-md flex items-center gap-2 font-semibold text-white bg-blue-500 hover:bg-blue-600">
+                    <Save size={16} />
+                    Sauvegarder les couleurs
+                </button>
+             </div>
+        </div>
+      </div>
+
+
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Configuration des Messages WhatsApp</h2>
+         <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
+             <div className="space-y-4">
+                <p className="text-sm text-muted-foreground dark:text-dark-muted-foreground">
+                    {"Utilisez des placeholders comme {{client}}, {{id}}, {{produit}}, {{prix}}, {{status}} pour personnaliser vos messages."}
+                </p>
+                <MessageSettingsSection title="Messages de Confirmation" category="statut" options={Statut} />
+                <MessageSettingsSection title="Messages de Ramassage" category="ramassage" options={Ramassage} />
+                <MessageSettingsSection title="Messages de Livraison" category="livraison" options={Livraison} />
+                <MessageSettingsSection title="Messages de Remboursement" category="remboursement" options={Remboursement} />
+                <MessageSettingsSection title="Messages de Commande retour" category="commandeRetour" options={CommandeRetour} />
+             </div>
+             <div className="flex justify-end items-center mt-6">
+                {showSaveConfirmation && <span className="text-sm text-green-600 mr-4">Modèles sauvegardés !</span>}
+                 <button onClick={resetMessageTemplates} className="px-4 py-2 rounded-md flex items-center gap-2 font-semibold text-sm border hover:bg-accent dark:hover:bg-dark-accent mr-4">
+                    <RefreshCw size={14} />
+                    Réinitialiser
+                </button>
+                <button onClick={handleSaveTemplates} className="px-4 py-2 rounded-md flex items-center gap-2 font-semibold text-white bg-blue-500 hover:bg-blue-600">
+                    <Save size={16} />
+                    Sauvegarder les modèles
+                </button>
+             </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Settings;
