@@ -1,3 +1,5 @@
+import React from 'react';
+
 export enum Platform {
   Shopify = 'Shopify',
   WooCommerce = 'WooCommerce',
@@ -6,6 +8,7 @@ export enum Platform {
 
 // Nouveaux enums pour les menus déroulants
 export enum Statut {
+  NonDefini = 'Non défini',
   PasDeReponse = 'PAS DE REPONSE',
   Confirme = 'Confirmé',
   BoiteVocale = 'Boite vocale',
@@ -14,11 +17,13 @@ export enum Statut {
 }
 
 export enum Ramassage {
+  NonDefini = 'Non défini',
   Ramasser = 'Ramasser',
   NonRamasser = 'Non ramasser',
 }
 
 export enum Livraison {
+  NonDefini = 'Non défini',
   PasDeReponse = 'PAS DE REPONSE',
   Livre = 'Livrer',
   Reporte = 'Reporter',
@@ -27,11 +32,13 @@ export enum Livraison {
 }
 
 export enum Remboursement {
+  NonDefini = 'Non défini',
   Payer = 'Payer',
   NonPayer = 'Non-payer',
 }
 
 export enum CommandeRetour {
+  NonDefini = 'Non défini',
   Retourner = 'Retourner',
   NonRetourne = 'Non retourné',
   Bloquer = 'Bloquer',
@@ -63,8 +70,19 @@ export interface Order {
   deliveryCompanyId: string | null;
 }
 
+export interface Product {
+  id: string; // Code article
+  name: string; // Nom de produit
+  imageUrl: string; // Photo
+  initialStock: number;
+  purchasePrice: number; // Prix d'achat
+  sellingPrice: number; // Prix de vente
+  showInOrders?: boolean;
+}
+
 export enum View {
     Dashboard = 'Dashboard',
+    Products = 'Products',
     Orders = 'Orders',
     Statistics = 'Statistics',
     Settings = 'Settings',

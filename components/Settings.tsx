@@ -29,18 +29,19 @@ const ColorSettingsSection: React.FC<{
       </button>
       {isOpen && (
          <div className="pt-4 pb-2 px-2 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
-            {Object.values(options).map((option) => (
+            {/* FIX: Explicitly type `option` as a string to prevent it from being inferred as `any`, which causes indexing errors. */}
+            {Object.values(options).map((option: string) => (
               <div key={option} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-5 h-5 rounded-full border dark:border-gray-600" style={{ backgroundColor: colors[category][option as keyof typeof colors[typeof category]] }}></div>
+                  <div className="w-5 h-5 rounded-full border dark:border-gray-600" style={{ backgroundColor: (colors[category] as any)[option] }}></div>
                   <span className="text-sm font-medium">{option}</span>
                 </div>
                 <input 
                   type="color"
-                  value={colors[category][option as keyof typeof colors[typeof category]]}
+                  value={(colors[category] as any)[option]}
                   onChange={(e) => handleColorChange(option, e.target.value)}
                   className="w-10 h-10 p-0 border-none rounded-md cursor-pointer bg-transparent"
-                  style={{'--tw-ring-color': colors[category][option as keyof typeof colors[typeof category]] } as React.CSSProperties}
+                  style={{'--tw-ring-color': (colors[category] as any)[option] } as React.CSSProperties}
                 />
               </div>
             ))}
@@ -61,7 +62,7 @@ const MessageSettingsSection: React.FC<{
   const handleTemplateChange = (status: string, value: string) => {
     setMessageTemplates(prev => {
       const newCategoryTemplates = { ...prev[category] };
-      // FIX: Cast to `any` to allow string indexing on a union of record types. This resolves the issue where TypeScript infers the property as `never`.
+      // FIX: Cast to `any` to allow string indexing on a union of record types, which TypeScript cannot otherwise resolve safely.
       (newCategoryTemplates as any)[status] = {
         ...(newCategoryTemplates as any)[status],
         template: value
@@ -76,7 +77,7 @@ const MessageSettingsSection: React.FC<{
   const handleToggleEnabled = (status: string) => {
     setMessageTemplates(prev => {
       const newCategoryTemplates = { ...prev[category] };
-      // FIX: Cast to `any` to allow string indexing on a union of record types. This resolves the issue where TypeScript infers the property as `never`.
+      // FIX: Cast to `any` to allow string indexing on a union of record types.
       const currentTemplate = (newCategoryTemplates as any)[status];
       (newCategoryTemplates as any)[status] = {
         ...currentTemplate,
@@ -97,8 +98,9 @@ const MessageSettingsSection: React.FC<{
         </button>
         {isOpen && (
             <div className="pt-4 pb-2 px-2 space-y-6">
-                {Object.values(options).map(status => {
-                    // FIX: Cast to `any` to allow string indexing on a union of record types. This resolves the issue where TypeScript infers the property as `never`.
+                {/* FIX: Explicitly type `status` as a string to resolve errors when it's used as an index, a key, or a child element. */}
+                {Object.values(options).map((status: string) => {
+                    // FIX: Cast to `any` to allow string indexing on a union of record types.
                     const messageConfig = (messageTemplates[category] as any)[status];
                     if (!messageConfig) return null;
                     const isEnabled = messageConfig.enabled;
@@ -135,7 +137,7 @@ const MessageSettingsSection: React.FC<{
 const Settings: React.FC = () => {
   const [isShopifyConnected, setIsShopifyConnected] = useState(false);
   const [isWooConnected, setIsWooConnected] = useState(false);
-  const { saveColors, resetColors, saveMessageTemplates, resetMessageTemplates } = useCustomization();
+  const { saveColors, resetColors, saveMessageTemplates, resetMessageTemplates, currency, setCurrency } = useCustomization();
 
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [showColorSaveConfirmation, setShowColorSaveConfirmation] = useState(false);
@@ -228,6 +230,23 @@ const Settings: React.FC = () => {
           onToggle={() => toggleConnection('woo')}
           logo="https://cdn.worldvectorlogo.com/logos/woocommerce-logo.svg"
         />
+      </div>
+
+       <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Devise</h2>
+        <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
+          <label htmlFor="currency-select" className="block text-sm font-medium mb-2">Sélectionnez la devise de l'application</label>
+          <select
+            id="currency-select"
+            value={currency}
+            onChange={(e) => setCurrency(e.target.value as 'EUR' | 'USD' | 'MAD')}
+            className="w-full max-w-xs p-2 border rounded-md bg-card dark:bg-dark-card focus:ring-2 focus:ring-blue-500 text-sm"
+          >
+            <option value="MAD">Dirham Marocain (MAD)</option>
+            <option value="EUR">Euro (€)</option>
+            <option value="USD">Dollar ($)</option>
+          </select>
+        </div>
       </div>
 
        <div className="space-y-4">

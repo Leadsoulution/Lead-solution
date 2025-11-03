@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Order } from '../types';
+import { Order, Product } from '../types';
 import { X } from 'lucide-react';
 
 // FIX: Added 'deliveryCompanyId' to the Omit type. New manual orders don't require this field in the modal, as it's set to null by default upon creation.
@@ -9,9 +9,10 @@ interface AddOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddOrder: (order: NewOrderData) => void;
+  products: Product[];
 }
 
-const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrder }) => {
+const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrder, products }) => {
   const initialFormState: NewOrderData = {
     customerName: '',
     customerPhone: '',
@@ -26,7 +27,7 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
 
   if (!isOpen) return null;
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
@@ -69,7 +70,18 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
           </div>
           <div>
             <label className="block text-sm font-medium">Produit *</label>
-            <input type="text" name="product" value={formData.product} onChange={handleChange} className="w-full mt-1 input-style" required />
+            <select
+              name="product"
+              value={formData.product}
+              onChange={handleChange}
+              className="w-full mt-1 input-style"
+              required
+            >
+              <option value="" disabled>-- Sélectionner un produit --</option>
+              {products.map(p => (
+                <option key={p.id} value={p.name}>{p.name}</option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium">Prix *</label>

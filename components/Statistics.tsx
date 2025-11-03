@@ -1,34 +1,39 @@
 
 
+
 import React, { useMemo, useState } from 'react';
-import { mockOrders } from '../services/mockData';
-import { Statut, Platform, Livraison, Role } from '../types';
+import { Statut, Platform, Livraison, Role, Order } from '../types';
 import StatCard from './StatCard';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from 'recharts';
 import { DollarSign, ShoppingCart, Users, BarChart3, Percent, Truck } from 'lucide-react';
 import { useCustomization } from '../contexts/CustomizationContext';
 import { useAuth } from '../contexts/AuthContext';
 
-const Statistics: React.FC = () => {
-    const { colors } = useCustomization();
+interface StatisticsProps {
+    orders: Order[];
+}
+
+const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
+    const { colors, formatCurrency } = useCustomization();
     const { users, currentUser } = useAuth();
     const [selectedUserId, setSelectedUserId] = useState<string>('all');
 
     const filteredOrders = useMemo(() => {
-        let orders = mockOrders;
+        let ordersToFilter = orders.filter(o => o.assignedUserId !== null && o.statut !== Statut.NonDefini);
+        
         // If a regular user is logged in, they only see their stats
         if (currentUser?.role === Role.User) {
-            return orders.filter(order => order.assignedUserId === currentUser.id);
+            return ordersToFilter.filter(order => order.assignedUserId === currentUser.id);
         }
 
         // If an admin has selected a specific user from the dropdown
         if (selectedUserId !== 'all') {
-            return orders.filter(order => order.assignedUserId === selectedUserId);
+            return ordersToFilter.filter(order => order.assignedUserId === selectedUserId);
         }
         
         // Admin view with "All users" selected
-        return orders;
-    }, [selectedUserId, currentUser]);
+        return ordersToFilter;
+    }, [orders, selectedUserId, currentUser]);
 
     const stats = useMemo(() => {
         const totalRevenue = filteredOrders.reduce((sum, order) => sum + order.price, 0);
@@ -49,6 +54,7 @@ const Statistics: React.FC = () => {
         const salesByUser = filteredOrders.reduce((acc, order) => {
             const user = users.find(u => u.id === order.assignedUserId);
             const userName = user ? user.username : 'Non assigné';
+            if (userName === 'Non assigné') return acc;
             acc[userName] = (acc[userName] || 0) + order.price;
             return acc;
         }, {} as Record<string, number>);
@@ -58,6 +64,7 @@ const Statistics: React.FC = () => {
 
     const statusDistributionData = useMemo(() => {
         const counts = filteredOrders.reduce((acc, order) => {
+            if (order.statut === Statut.NonDefini) return acc;
             acc[order.statut] = (acc[order.statut] || 0) + 1;
             return acc;
         }, {} as Record<Statut, number>);
@@ -90,13 +97,15 @@ const Statistics: React.FC = () => {
         }, {} as Record<string, { name: string, quantity: number, sales: number }>);
 
         return Object.values(productStats)
-            .sort((a, b) => b.sales - a.sales)
+            // FIX: Explicitly type `a` and `b` to resolve an error where they were inferred as `unknown`.
+            .sort((a: { sales: number }, b: { sales: number }) => b.sales - a.sales)
             .slice(0, 5);
     }, [filteredOrders]);
 
     const userPerformance = useMemo(() => {
         return users.map(user => {
-            const assignedOrders = mockOrders.filter(order => order.assignedUserId === user.id);
+            // FIX: The parameter for the filter callback is 'order', but 'o' was used. Corrected the reference to 'order.statut' to resolve the 'Cannot find name' error.
+            const assignedOrders = orders.filter(order => order.assignedUserId === user.id && order.statut !== Statut.NonDefini);
             const totalAssigned = assignedOrders.length;
             if (totalAssigned === 0) {
                 return { name: user.username, totalOrders: 0, confirmationRate: 0, deliveryRate: 0 };
@@ -110,7 +119,7 @@ const Statistics: React.FC = () => {
                 deliveryRate: (delivered / totalAssigned) * 100
             };
         });
-    }, [users]);
+    }, [users, orders]);
 
 
     const USER_COLORS = ['#3b82f6', '#16a34a', '#f97316', '#ef4444', '#8b5cf6', '#eab308', '#64748b'];
@@ -134,7 +143,7 @@ const Statistics: React.FC = () => {
                 )}
             </div>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                <StatCard title="Chiffre d'affaires" value={`${stats.totalRevenue.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}`} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} />
+                <StatCard title="Chiffre d'affaires" value={formatCurrency(stats.totalRevenue)} icon={<DollarSign className="h-4 w-4 text-muted-foreground" />} />
                 <StatCard title="Commandes" value={stats.totalOrders} icon={<ShoppingCart className="h-4 w-4 text-muted-foreground" />} />
                 <StatCard title="Taux de Confirmation" value={`${stats.confirmationRate.toFixed(1)}%`} icon={<Percent className="h-4 w-4 text-muted-foreground" />} />
                 <StatCard title="Taux de Livraison" value={`${stats.deliveryRate.toFixed(1)}%`} icon={<Truck className="h-4 w-4 text-muted-foreground" />} />
@@ -153,8 +162,8 @@ const Statistics: React.FC = () => {
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted))" />
                             <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                            <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `${String(value)}€`} />
-                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => [value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }), "Chiffre d'affaires"]} />
+                            <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatCurrency(Number(value))} />
+                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => [formatCurrency(value), "Chiffre d'affaires"]} />
                             <Area type="monotone" dataKey="Chiffre d'affaires" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRevenue)" />
                         </AreaChart>
                     </ResponsiveContainer>
@@ -168,7 +177,7 @@ const Statistics: React.FC = () => {
                             <Pie data={userSalesData} cx="50%" cy="50%" labelLine={false} outerRadius={100} dataKey="value" nameKey="name" label={({ name, percent }) => `${name} ${(Number(percent || 0) * 100).toFixed(0)}%`}>
                                 {userSalesData.map((entry, index) => <Cell key={`cell-${entry.name}`} fill={USER_COLORS[index % USER_COLORS.length]} />)}
                             </Pie>
-                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => value.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}/>
+                            <Tooltip contentStyle={{ backgroundColor: 'hsl(var(--background))', border: '1px solid hsl(var(--border))' }} formatter={(value: number) => formatCurrency(value)}/>
                             <Legend />
                         </PieChart>
                     </ResponsiveContainer>
@@ -219,7 +228,7 @@ const Statistics: React.FC = () => {
                                 {topProducts.map((product) => (
                                     <tr key={product.name} className="border-b dark:border-gray-700 last:border-b-0">
                                         <td className="px-4 py-2 font-medium">{product.name}</td>
-                                        <td className="px-4 py-2 text-right">{product.sales.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })}</td>
+                                        <td className="px-4 py-2 text-right">{formatCurrency(product.sales)}</td>
                                         <td className="px-4 py-2 text-right">{product.quantity}</td>
                                     </tr>
                                 ))}

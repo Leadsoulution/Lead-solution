@@ -1,4 +1,4 @@
-import { Order, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour } from '../types';
+import { Order, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, Product } from '../types';
 
 const generateRandomDate = (start: Date, end: Date): string => {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime())).toISOString();
@@ -6,6 +6,54 @@ const generateRandomDate = (start: Date, end: Date): string => {
 
 const startDate = new Date(2023, 0, 1);
 const endDate = new Date();
+
+export const mockProducts: Product[] = [
+  {
+    id: 'WH-001',
+    name: 'Wireless Headphones',
+    imageUrl: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=2070&auto=format&fit=crop',
+    initialStock: 100,
+    purchasePrice: 45.00,
+    sellingPrice: 99.99,
+    showInOrders: true,
+  },
+  {
+    id: 'LW-001',
+    name: 'Leather Wallet',
+    imageUrl: 'https://images.unsplash.com/photo-1613482193504-2b73335de9a3?q=80&w=1974&auto=format&fit=crop',
+    initialStock: 200,
+    purchasePrice: 15.00,
+    sellingPrice: 49.50,
+    showInOrders: true,
+  },
+  {
+    id: 'SW-001',
+    name: 'Smartwatch',
+    imageUrl: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?q=80&w=1964&auto=format&fit=crop',
+    initialStock: 75,
+    purchasePrice: 120.00,
+    sellingPrice: 249.00,
+    showInOrders: true,
+  },
+  {
+    id: 'CM-001',
+    name: 'Coffee Maker',
+    imageUrl: 'https://images.unsplash.com/photo-1563823795-48356d299336?q=80&w=1964&auto=format&fit=crop',
+    initialStock: 50,
+    purchasePrice: 35.50,
+    sellingPrice: 78.25,
+    showInOrders: true,
+  },
+  {
+    id: 'BS-001',
+    name: 'Bookshelf',
+    imageUrl: 'https://images.unsplash.com/photo-1594212699903-ec8a6e594417?q=80&w=1964&auto=format&fit=crop',
+    initialStock: 40,
+    purchasePrice: 60.00,
+    sellingPrice: 120.00,
+    showInOrders: true,
+  },
+];
 
 export const mockOrders: Order[] = [
   { 

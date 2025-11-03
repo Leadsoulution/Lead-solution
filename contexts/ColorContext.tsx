@@ -4,6 +4,8 @@ import { Statut, StatutColors } from '../types';
 
 // FIX: Corrected type typo from StatusColors to StatutColors
 const DEFAULT_COLORS: StatutColors = {
+  // FIX: The property '[Statut.NonDefini]' was missing, causing a type error. Added it to ensure conformity with the 'StatutColors' type definition.
+  [Statut.NonDefini]: '#FFFFFF',
   [Statut.PasDeReponse]: '#eab308',
   [Statut.Confirme]: '#22c55e',
   [Statut.BoiteVocale]: '#f97316',

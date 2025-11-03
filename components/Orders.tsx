@@ -1,23 +1,31 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { mockOrders } from '../services/mockData';
-import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform } from '../types';
-import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload } from 'lucide-react';
+import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product } from '../types';
+import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle } from 'lucide-react';
 import ColorSelector from './ColorSelector';
 import { useAuth } from '../contexts/AuthContext';
 import { useCustomization } from '../contexts/CustomizationContext';
 import AddOrderModal from './AddOrderModal';
 import FilterColorSelector from './FilterColorSelector';
+import AddProductModal from './AddProductModal';
 
 
-const Orders: React.FC = () => {
-  const [orders, setOrders] = useState<Order[]>(() => JSON.parse(JSON.stringify(mockOrders)));
+interface OrdersProps {
+  orders: Order[];
+  setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
+  products: Product[];
+  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+}
+
+const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const { users, deliveryCompanies } = useAuth();
-  const { messageTemplates } = useCustomization();
+  const { messageTemplates, formatCurrency } = useCustomization();
   const [isAddOrderModalOpen, setIsAddOrderModalOpen] = useState(false);
+  const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  const [selectedProductFilter, setSelectedProductFilter] = useState<string | null>(null);
 
   useEffect(() => {
     if (notification) {
@@ -43,12 +51,8 @@ const Orders: React.FC = () => {
 
   const filteredOrders = useMemo(() => {
     return orders
-      .filter(order => 
-        order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.customerPhone.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        order.id.toLowerCase().includes(searchTerm.toLowerCase())
-      )
       .filter(order => {
+        if (selectedProductFilter && order.product !== selectedProductFilter) return false;
         if (filters.statut && order.statut !== filters.statut) return false;
         if (filters.ramassage && order.ramassage !== filters.ramassage) return false;
         if (filters.livraison && order.livraison !== filters.livraison) return false;
@@ -58,8 +62,13 @@ const Orders: React.FC = () => {
         if (filters.startDate && new Date(order.date) < new Date(filters.startDate + 'T00:00:00')) return false;
         if (filters.endDate && new Date(order.date) > new Date(filters.endDate + 'T23:59:59')) return false;
         return true;
-      });
-  }, [orders, searchTerm, filters]);
+      })
+      .filter(order => 
+        order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.customerPhone.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        order.id.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+  }, [orders, searchTerm, filters, selectedProductFilter]);
 
   const handleUpdateOrder = (orderId: string, field: keyof Order, value: any) => {
     setOrders(prevOrders =>
@@ -71,6 +80,10 @@ const Orders: React.FC = () => {
   
    const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
+  };
+  
+  const handleProductFilterClick = (productName: string) => {
+    setSelectedProductFilter(prev => prev === productName ? null : productName);
   };
 
   const resetFilters = () => {
@@ -93,7 +106,7 @@ const Orders: React.FC = () => {
     message = message.replace(/{{client}}/g, order.customerName)
                      .replace(/{{id}}/g, order.id)
                      .replace(/{{produit}}/g, order.product)
-                     .replace(/{{prix}}/g, order.price.toFixed(2))
+                     .replace(/{{prix}}/g, formatCurrency(order.price))
                      .replace(/{{status}}/g, status);
 
 
@@ -111,15 +124,24 @@ const Orders: React.FC = () => {
   
   const handleAddOrder = (newOrderData: Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount' | 'deliveryCompanyId'>) => {
     const newOrder: Order = {
+      // Data from form
+      customerName: newOrderData.customerName,
+      customerPhone: newOrderData.customerPhone,
+      address: newOrderData.address,
+      price: newOrderData.price,
+      product: newOrderData.product,
+      noteClient: newOrderData.noteClient,
+      noteObligatoire: newOrderData.noteObligatoire,
+
+      // Default values
       id: `manual-${Date.now()}`,
       date: new Date().toISOString(),
-      ...newOrderData,
       platform: Platform.Manual,
-      statut: Statut.PasDeReponse,
-      ramassage: Ramassage.NonRamasser,
-      livraison: Livraison.PasDeReponse,
-      remboursement: Remboursement.NonPayer,
-      commandeRetour: CommandeRetour.NonRetourne,
+      statut: Statut.NonDefini,
+      ramassage: Ramassage.NonDefini,
+      livraison: Livraison.NonDefini,
+      remboursement: Remboursement.NonDefini,
+      commandeRetour: CommandeRetour.NonDefini,
       assignedUserId: null,
       deliveryCompanyId: null,
       callCount: 0,
@@ -191,6 +213,16 @@ const Orders: React.FC = () => {
     reader.readAsText(file);
 };
 
+  const handleAddProduct = (newProduct: Product) => {
+    if (products.some(p => p.id.toLowerCase() === newProduct.id.toLowerCase())) {
+        alert("Un produit avec ce code d'article existe déjà.");
+        return;
+    }
+    setProducts(prev => [newProduct, ...prev]);
+    setIsAddProductModalOpen(false);
+    setNotification({ type: 'success', message: 'Produit ajouté avec succès !' });
+  };
+
   const renderInput = (order: Order, field: keyof Order, placeholder: string) => (
       <input
           type="text"
@@ -226,6 +258,65 @@ const Orders: React.FC = () => {
     status: 'bg-gray-200 dark:bg-gray-700'
   };
 
+  const handleExportOrders = () => {
+    if (filteredOrders.length === 0) {
+      setNotification({ type: 'error', message: "Aucune commande à exporter." });
+      return;
+    }
+  
+    const headers = [
+      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Prix', 'Produit', 
+      'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Ramassage', 'Livraison', 
+      'Société de Livraison', 'Remboursement', 'Commande retour', 'Note Obligatoire', 'Appels'
+    ];
+  
+    const escapeCSV = (val: any): string => {
+      const str = String(val ?? '');
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return `"${str.replace(/"/g, '""')}"`;
+      }
+      return str;
+    };
+  
+    const rows = filteredOrders.map(order => {
+      const assignedUser = users.find(u => u.id === order.assignedUserId)?.username || 'Non assigné';
+      const deliveryCompany = deliveryCompanies.find(c => c.id === order.deliveryCompanyId)?.name || 'Non assigné';
+      
+      return [
+        escapeCSV(order.id),
+        escapeCSV(new Date(order.date).toLocaleDateString('fr-FR')),
+        escapeCSV(order.customerName),
+        escapeCSV(order.customerPhone),
+        escapeCSV(order.address),
+        escapeCSV(order.price),
+        escapeCSV(order.product),
+        escapeCSV(order.statut),
+        escapeCSV(assignedUser),
+        escapeCSV(order.noteClient),
+        escapeCSV(order.ramassage),
+        escapeCSV(order.livraison),
+        escapeCSV(deliveryCompany),
+        escapeCSV(order.remboursement),
+        escapeCSV(order.commandeRetour),
+        escapeCSV(order.noteObligatoire),
+        escapeCSV(order.callCount),
+      ].join(',');
+    });
+  
+    const BOM = "\uFEFF"; // Byte Order Mark for UTF-8
+    const csvContent = BOM + [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `commandes_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setNotification({ type: 'success', message: `${filteredOrders.length} commandes exportées avec succès.` });
+  };
+  
   return (
     <div className="space-y-6">
       <h1 className="text-3xl font-bold">Commandes</h1>
@@ -268,6 +359,13 @@ const Orders: React.FC = () => {
                     <Upload size={16} />
                     Importer
                 </button>
+                <button
+                    onClick={handleExportOrders}
+                    className="flex items-center justify-center gap-2 px-4 py-2 border text-sm font-medium rounded-md shadow-sm text-secondary-foreground bg-secondary hover:bg-accent"
+                >
+                    <Archive size={16} />
+                    Exporter
+                </button>
                 <input
                     type="file"
                     ref={fileInputRef}
@@ -277,9 +375,49 @@ const Orders: React.FC = () => {
                 />
             </div>
           </div>
+        
+        {/* Product Filter Section */}
+        <div className="mt-4 border-t pt-2 dark:border-gray-700">
+            <p className="text-sm font-semibold mb-2 px-1">Filtrer par produit</p>
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 -mx-4 px-4">
+                <button
+                    onClick={() => setSelectedProductFilter(null)}
+                    className={`flex-shrink-0 flex flex-col items-center justify-center text-center p-2 rounded-lg border-2 transition-all duration-200 w-20 h-20 gap-1 ${
+                    !selectedProductFilter 
+                        ? 'bg-blue-500 border-blue-600 text-white shadow-lg scale-105' 
+                        : 'bg-[#CFCFCF] dark:bg-dark-card border-gray-300 dark:border-gray-700 text-secondary-foreground hover:shadow-md hover:scale-105 hover:border-blue-400'
+                    }`}
+                >
+                    <Archive size={24} />
+                    <span className="text-xs font-semibold">Tous les produits</span>
+                </button>
+                {products.filter(p => p.showInOrders ?? true).map(product => (
+                <button
+                    key={product.id}
+                    onClick={() => handleProductFilterClick(product.name)}
+                    className={`relative flex-shrink-0 flex flex-col items-center justify-start text-center p-2 rounded-lg border-2 transition-all duration-200 w-20 h-20 gap-1 group bg-[#CFCFCF] dark:bg-dark-card ${
+                    selectedProductFilter === product.name
+                        ? 'border-blue-500 shadow-lg scale-105'
+                        : 'border-gray-300 dark:border-gray-700 hover:shadow-md hover:scale-105 hover:border-blue-400'
+                    }`}
+                >
+                    <div className="w-16 h-12 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden flex items-center justify-center">
+                         <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                    </div>
+                    <span className="text-xs font-semibold leading-tight line-clamp-2">{product.name}</span>
+                    {selectedProductFilter === product.name && (
+                        <div className="absolute top-1 right-1 bg-blue-500 rounded-full p-0.5 shadow">
+                            <CheckCircle size={14} className="text-white" />
+                        </div>
+                    )}
+                </button>
+                ))}
+            </div>
+        </div>
+
 
         {showFilters && (
-            <div className="mb-6 p-4 border-2 border-blue-500 rounded-lg shadow-md bg-blue-50/20 dark:bg-blue-900/10">
+            <div className="mt-6 p-4 border-2 border-blue-500 rounded-lg shadow-md bg-blue-50/20 dark:bg-blue-900/10">
                 <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-4 gap-4">
                     <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 flex items-center gap-2">
                         <Filter size={20} />
@@ -367,7 +505,7 @@ const Orders: React.FC = () => {
             </div>
         )}
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto mt-4">
           <table className="w-full border-collapse text-xs">
             <thead className="font-bold text-gray-600 dark:text-gray-300 uppercase">
               <tr>
@@ -395,95 +533,106 @@ const Orders: React.FC = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredOrders.map(order => (
-                <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
-                  <td className="p-1 border min-w-[100px]">{new Date(order.date).toLocaleDateString('fr-FR')}</td>
-                  <td className="p-1 border min-w-[150px]">{order.customerName}</td>
-                  <td className="p-1 border min-w-[120px]">{order.customerPhone}</td>
-                  <td className="p-1 border min-w-[200px]">{order.address}</td>
-                  <td className="p-1 border min-w-[80px] text-right">{order.price.toFixed(2)}€</td>
-                  <td className="p-1 border min-w-[150px]">{order.product}</td>
-                  <td className={`p-1 border min-w-[120px]`}>
-                    <div className="flex items-center justify-center gap-2">
-                        <span className="font-medium text-sm">{order.callCount}</span>
-                        <button
-                            onClick={() => handleUpdateOrder(order.id, 'callCount', order.callCount + 1)}
-                            title="Incrémenter le nombre d'appels"
-                            className="p-1.5 rounded-md bg-pink-500 text-white hover:bg-pink-600"
+              {filteredOrders.map(order => {
+                  const product = products.find(p => p.name === order.product);
+                  return (
+                    <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
+                      <td className="p-1 border min-w-[100px]">{new Date(order.date).toLocaleDateString('fr-FR')}</td>
+                      <td className="p-1 border min-w-[150px]">{order.customerName}</td>
+                      <td className="p-1 border min-w-[120px]">{order.customerPhone}</td>
+                      <td className="p-1 border min-w-[200px]">{order.address}</td>
+                      <td className="p-1 border min-w-[80px] text-right">{formatCurrency(order.price)}</td>
+                      <td className="p-1 border min-w-[200px]">
+                        <div className="flex items-center gap-2">
+                            {product ? (
+                                <img src={product.imageUrl} alt={product.name} className="h-10 w-10 object-cover rounded-md flex-shrink-0" />
+                            ) : (
+                                <div className="h-10 w-10 bg-secondary dark:bg-dark-secondary rounded-md flex-shrink-0"></div>
+                            )}
+                            <span className="font-medium">{order.product}</span>
+                        </div>
+                      </td>
+                      <td className={`p-1 border min-w-[120px]`}>
+                        <div className="flex items-center justify-center gap-2">
+                            <span className="font-medium text-sm">{order.callCount}</span>
+                            <button
+                                onClick={() => handleUpdateOrder(order.id, 'callCount', order.callCount + 1)}
+                                title="Incrémenter le nombre d'appels"
+                                className="p-1.5 rounded-md bg-pink-500 text-white hover:bg-pink-600"
+                            >
+                                <Phone size={12} />
+                            </button>
+                        </div>
+                      </td>
+                      <td className="p-1 border min-w-[150px]">
+                        <ColorSelector
+                          value={order.statut}
+                          onChange={(newValue) => handleUpdateOrder(order.id, 'statut', newValue)}
+                          options={Statut}
+                          category="statut"
+                        />
+                      </td>
+                      <td className="p-1 border min-w-[150px]">
+                        <select
+                            value={order.assignedUserId || ''}
+                            onChange={(e) => handleUpdateOrder(order.id, 'assignedUserId', e.target.value || null)}
+                            className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
                         >
-                            <Phone size={12} />
-                        </button>
-                    </div>
-                  </td>
-                  <td className="p-1 border min-w-[150px]">
-                    <ColorSelector
-                      value={order.statut}
-                      onChange={(newValue) => handleUpdateOrder(order.id, 'statut', newValue)}
-                      options={Statut}
-                      category="statut"
-                    />
-                  </td>
-                  <td className="p-1 border min-w-[150px]">
-                    <select
-                        value={order.assignedUserId || ''}
-                        onChange={(e) => handleUpdateOrder(order.id, 'assignedUserId', e.target.value || null)}
-                        className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
-                    >
-                        <option value="">-- Non assigné --</option>
-                        {users.map(user => (
-                            <option key={user.id} value={user.id}>
-                                {user.username}
-                            </option>
-                        ))}
-                    </select>
-                  </td>
-                  <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteClient', 'Note...')}</td>
-                  <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'statut')}</td>
-                  <td className="p-1 border min-w-[150px]">
-                    <ColorSelector
-                        value={order.ramassage}
-                        onChange={(newValue) => handleUpdateOrder(order.id, 'ramassage', newValue)}
-                        options={Ramassage}
-                        category="ramassage"
-                    />
-                  </td>
-                  <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'ramassage')}</td>
-                  <td className="p-1 border min-w-[180px]">
-                    <ColorSelector
-                        value={order.livraison}
-                        onChange={(newValue) => handleUpdateOrder(order.id, 'livraison', newValue)}
-                        options={Livraison}
-                        category="livraison"
-                    />
-                  </td>
-                  <td className="p-1 border min-w-[170px]">
-                    <select value={order.deliveryCompanyId || ''} onChange={(e) => handleUpdateOrder(order.id, 'deliveryCompanyId', e.target.value || null)} className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs">
-                        <option value="">-- Non assigné --</option>
-                        {deliveryCompanies.map(company => ( <option key={company.id} value={company.id}>{company.name}</option> ))}
-                    </select>
-                  </td>
-                   <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'livraison')}</td>
-                  <td className="p-1 border min-w-[120px]">
-                    <ColorSelector
-                        value={order.remboursement}
-                        onChange={(newValue) => handleUpdateOrder(order.id, 'remboursement', newValue)}
-                        options={Remboursement}
-                        category="remboursement"
-                    />
-                  </td>
-                  <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'remboursement')}</td>
-                  <td className="p-1 border min-w-[150px]">
-                     <ColorSelector
-                        value={order.commandeRetour}
-                        onChange={(newValue) => handleUpdateOrder(order.id, 'commandeRetour', newValue)}
-                        options={CommandeRetour}
-                        category="commandeRetour"
-                    />
-                  </td>
-                  <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'commandeRetour')}</td>
-                  <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteObligatoire', 'Note...')}</td>
-                </tr>
-              ))}
+                            <option value="">-- Non assigné --</option>
+                            {users.map(user => (
+                                <option key={user.id} value={user.id}>
+                                    {user.username}
+                                </option>
+                            ))}
+                        </select>
+                      </td>
+                      <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteClient', 'Note...')}</td>
+                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'statut')}</td>
+                      <td className="p-1 border min-w-[150px]">
+                        <ColorSelector
+                            value={order.ramassage}
+                            onChange={(newValue) => handleUpdateOrder(order.id, 'ramassage', newValue)}
+                            options={Ramassage}
+                            category="ramassage"
+                        />
+                      </td>
+                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'ramassage')}</td>
+                      <td className="p-1 border min-w-[180px]">
+                        <ColorSelector
+                            value={order.livraison}
+                            onChange={(newValue) => handleUpdateOrder(order.id, 'livraison', newValue)}
+                            options={Livraison}
+                            category="livraison"
+                        />
+                      </td>
+                      <td className="p-1 border min-w-[170px]">
+                        <select value={order.deliveryCompanyId || ''} onChange={(e) => handleUpdateOrder(order.id, 'deliveryCompanyId', e.target.value || null)} className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs">
+                            <option value="">-- Non assigné --</option>
+                            {deliveryCompanies.map(company => ( <option key={company.id} value={company.id}>{company.name}</option> ))}
+                        </select>
+                      </td>
+                       <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'livraison')}</td>
+                      <td className="p-1 border min-w-[120px]">
+                        <ColorSelector
+                            value={order.remboursement}
+                            onChange={(newValue) => handleUpdateOrder(order.id, 'remboursement', newValue)}
+                            options={Remboursement}
+                            category="remboursement"
+                        />
+                      </td>
+                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'remboursement')}</td>
+                      <td className="p-1 border min-w-[150px]">
+                         <ColorSelector
+                            value={order.commandeRetour}
+                            onChange={(newValue) => handleUpdateOrder(order.id, 'commandeRetour', newValue)}
+                            options={CommandeRetour}
+                            category="commandeRetour"
+                        />
+                      </td>
+                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'commandeRetour')}</td>
+                      <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteObligatoire', 'Note...')}</td>
+                    </tr>
+                )})}
             </tbody>
           </table>
         </div>
@@ -492,6 +641,12 @@ const Orders: React.FC = () => {
         isOpen={isAddOrderModalOpen}
         onClose={() => setIsAddOrderModalOpen(false)}
         onAddOrder={handleAddOrder}
+        products={products}
+      />
+       <AddProductModal
+        isOpen={isAddProductModalOpen}
+        onClose={() => setIsAddProductModalOpen(false)}
+        onAddProduct={handleAddProduct}
       />
     </div>
   );
