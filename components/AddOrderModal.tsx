@@ -21,6 +21,9 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     product: '',
     noteClient: '',
     noteObligatoire: '',
+    size: '',
+    color: '',
+    discount: 0,
   };
   const [formData, setFormData] = useState<NewOrderData>(initialFormState);
   const [error, setError] = useState('');
@@ -31,7 +34,7 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: name === 'price' ? parseFloat(value) || 0 : value,
+      [name]: (name === 'price' || name === 'discount') ? parseFloat(value) || 0 : value,
     }));
   };
 
@@ -83,10 +86,26 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
               ))}
             </select>
           </div>
-          <div>
-            <label className="block text-sm font-medium">Prix *</label>
-            <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
-          </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium">Taille</label>
+                <input type="text" name="size" value={formData.size} onChange={handleChange} className="w-full mt-1 input-style" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Couleur</label>
+                <input type="text" name="color" value={formData.color} onChange={handleChange} className="w-full mt-1 input-style" />
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium">Prix *</label>
+                  <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
+                </div>
+                 <div>
+                  <label className="block text-sm font-medium">Remise</label>
+                  <input type="number" name="discount" value={formData.discount} onChange={handleChange} className="w-full mt-1 input-style" min="0" step="0.01" />
+                </div>
+            </div>
           <div>
             <label className="block text-sm font-medium">Note du client</label>
             <textarea name="noteClient" value={formData.noteClient} onChange={handleChange} rows={2} className="w-full mt-1 input-style" />

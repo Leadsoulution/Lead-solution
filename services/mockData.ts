@@ -16,6 +16,7 @@ export const mockProducts: Product[] = [
     purchasePrice: 45.00,
     sellingPrice: 99.99,
     showInOrders: true,
+    discount: 10,
   },
   {
     id: 'LW-001',
@@ -25,6 +26,7 @@ export const mockProducts: Product[] = [
     purchasePrice: 15.00,
     sellingPrice: 49.50,
     showInOrders: true,
+    discount: 5,
   },
   {
     id: 'SW-001',
@@ -34,6 +36,7 @@ export const mockProducts: Product[] = [
     purchasePrice: 120.00,
     sellingPrice: 249.00,
     showInOrders: true,
+    discount: 0,
   },
   {
     id: 'CM-001',
@@ -43,6 +46,7 @@ export const mockProducts: Product[] = [
     purchasePrice: 35.50,
     sellingPrice: 78.25,
     showInOrders: true,
+    discount: 0,
   },
   {
     id: 'BS-001',
@@ -52,6 +56,7 @@ export const mockProducts: Product[] = [
     purchasePrice: 60.00,
     sellingPrice: 120.00,
     showInOrders: true,
+    discount: 15,
   },
 ];
 
@@ -64,6 +69,9 @@ export const mockOrders: Order[] = [
     address: '123 Rue de Paris, 75001 Paris',
     price: 99.99, 
     product: 'Wireless Headphones', 
+    size: 'L',
+    color: 'Black',
+    discount: 10,
     statut: Statut.Confirme, 
     assignedUserId: 'admin-001',
     noteClient: 'Appeler avant de livrer',
@@ -91,7 +99,7 @@ export const mockOrders: Order[] = [
     livraison: Livraison.PasDeReponse,
     remboursement: Remboursement.NonPayer,
     commandeRetour: CommandeRetour.NonRetourne,
-    noteObligatoire: 'Client difficile',
+    noteObligatoire: '',
     platform: Platform.WooCommerce,
     callCount: 3,
     deliveryCompanyId: null,
@@ -104,6 +112,9 @@ export const mockOrders: Order[] = [
     address: '78 Boulevard de Marseille, 13008 Marseille',
     price: 249.00, 
     product: 'Smartwatch', 
+    size: 'M',
+    color: 'Silver',
+    discount: 25,
     statut: Statut.Rappel, 
     assignedUserId: 'admin-001',
     noteClient: 'Cadeau, emballage svp',
@@ -131,7 +142,7 @@ export const mockOrders: Order[] = [
     livraison: Livraison.Annule,
     remboursement: Remboursement.NonPayer,
     commandeRetour: CommandeRetour.Retourner,
-    noteObligatoire: 'Stock insuffisant',
+    noteObligatoire: '',
     platform: Platform.WooCommerce,
     callCount: 0,
     deliveryCompanyId: null,

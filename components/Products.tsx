@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Order, Statut, Livraison, Product } from '../types';
-import { Trash2, PlusCircle, Archive } from 'lucide-react';
+import { Order, Statut, Livraison, Product, CommandeRetour } from '../types';
+import { Trash2, PlusCircle, Archive, Edit, Save, X } from 'lucide-react';
 import AddProductModal from './AddProductModal';
 import { useCustomization } from '../contexts/CustomizationContext';
 
@@ -14,6 +14,8 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const { formatCurrency } = useCustomization();
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editedProductData, setEditedProductData] = useState<Partial<Product>>({});
 
   React.useEffect(() => {
     if (notification) {
@@ -26,13 +28,17 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     return products.map(product => {
       const ordersForProduct = orders.filter(order => order.product === product.name);
 
-      const deliveredCount = ordersForProduct.filter(o => o.livraison === Livraison.Livre).length;
-      const stockReel = product.initialStock - deliveredCount;
-      
-      const reservedCount = ordersForProduct.filter(
-        o => o.statut === Statut.Confirme && o.livraison !== Livraison.Livre
+      const deliveredCount = ordersForProduct.filter(
+        o => o.livraison === Livraison.Livre
       ).length;
-      const stockDisponible = stockReel - reservedCount;
+      const stockReel = product.initialStock - deliveredCount;
+
+      const unavailableCount = ordersForProduct.filter(
+        o => o.statut === Statut.Confirme && 
+             o.livraison !== Livraison.Annule && 
+             o.commandeRetour !== CommandeRetour.Retourner
+      ).length;
+      const stockDisponible = product.initialStock - unavailableCount;
 
       return {
         ...product,
@@ -66,6 +72,36 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
         )
     );
   };
+  
+  const handleEditClick = (product: Product) => {
+    setEditingProductId(product.id);
+    setEditedProductData(product);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingProductId(null);
+    setEditedProductData({});
+  };
+
+  const handleSaveEdit = () => {
+    if (!editingProductId) return;
+    setProducts(prevProducts =>
+      prevProducts.map(p =>
+        p.id === editingProductId ? { ...p, ...editedProductData } : p
+      )
+    );
+    setEditingProductId(null);
+    setEditedProductData({});
+    setNotification({ type: 'success', message: 'Produit mis à jour avec succès.' });
+  };
+  
+  const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setEditedProductData(prev => ({
+      ...prev,
+      [name]: ['initialStock', 'purchasePrice', 'sellingPrice', 'discount'].includes(name) ? parseFloat(value) || 0 : value,
+    }));
+  };
 
   const handleExportProducts = () => {
     if (productsWithStock.length === 0) {
@@ -74,7 +110,9 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     }
 
     const headers = [
-      'Code Article', 'Nom du Produit', 'URL de l\'image', 'Stock Initial', 'Prix d\'Achat', 'Prix de Vente', 'Stock Réel', 'Stock Disponible'
+      'Code Article', 'Nom du Produit', 'URL de l\'image', 'Stock Initial', 'Prix d\'Achat', 'Prix de Vente',
+      'Remise (%)',
+      'Stock Réel', 'Stock Disponible'
     ];
 
     const escapeCSV = (val: any): string => {
@@ -92,6 +130,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
       escapeCSV(p.initialStock),
       escapeCSV(p.purchasePrice),
       escapeCSV(p.sellingPrice),
+      escapeCSV(p.discount),
       escapeCSV(p.stockReel),
       escapeCSV(p.stockDisponible),
     ].join(','));
@@ -109,6 +148,10 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     URL.revokeObjectURL(url);
     setNotification({ type: 'success', message: `${productsWithStock.length} produits exportés avec succès.` });
   };
+
+  const inputClass = "w-full p-1 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-sm";
+  const inputNumberClass = `${inputClass} text-right`;
+
 
   return (
     <div className="space-y-6">
@@ -141,54 +184,89 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
           <table className="w-full text-sm text-left">
             <thead className="text-xs text-muted-foreground uppercase bg-secondary dark:bg-dark-secondary">
               <tr>
-                <th className="px-4 py-3">Photo</th>
-                <th className="px-4 py-3">Code Article</th>
-                <th className="px-4 py-3">Nom du Produit</th>
-                <th className="px-4 py-3 text-right">Stock Réel</th>
-                <th className="px-4 py-3 text-right">Stock Disponible</th>
-                <th className="px-4 py-3 text-right">Prix de Vente</th>
-                <th className="px-4 py-3 text-right">Prix d'Achat</th>
-                <th className="px-4 py-3 text-center">Afficher dans Ordres</th>
-                <th className="px-4 py-3 text-center">Actions</th>
+                <th className="px-2 py-3">Photo</th>
+                <th className="px-2 py-3">Code Article</th>
+                <th className="px-2 py-3">Nom du Produit</th>
+                <th className="px-2 py-3 text-right">Stock Initial</th>
+                <th className="px-2 py-3 text-right">Stock Réel</th>
+                <th className="px-2 py-3 text-right">Stock Disponible</th>
+                <th className="px-2 py-3 text-right">Prix d'Achat</th>
+                <th className="px-2 py-3 text-right">Prix de Vente</th>
+                <th className="px-2 py-3 text-right">Remise (%)</th>
+                <th className="px-2 py-3 text-right">Prix Remisé</th>
+                <th className="px-2 py-3 text-center">Afficher</th>
+                <th className="px-2 py-3 text-center">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y dark:divide-gray-700">
-              {productsWithStock.map(product => (
-                <tr key={product.id} className="hover:bg-muted dark:hover:bg-dark-muted">
-                  <td className="px-4 py-2">
-                    <img src={product.imageUrl} alt={product.name} className="h-12 w-12 object-cover rounded-md" />
-                  </td>
-                  <td className="px-4 py-2 font-mono text-muted-foreground">{product.id}</td>
-                  <td className="px-4 py-2 font-medium">{product.name}</td>
-                  <td className="px-4 py-2 text-right font-semibold">{product.stockReel}</td>
-                  <td className={`px-4 py-2 text-right font-semibold ${product.stockDisponible > 10 ? 'text-green-600 dark:text-green-400' : 'text-orange-500 dark:text-orange-400'}`}>{product.stockDisponible}</td>
-                  <td className="px-4 py-2 text-right">{formatCurrency(product.sellingPrice)}</td>
-                  <td className="px-4 py-2 text-right text-muted-foreground">{formatCurrency(product.purchasePrice)}</td>
-                  <td className="px-4 py-2 text-center">
-                    <div
-                      onClick={() => handleToggleShowInOrders(product.id)}
-                      className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors ${
-                          product.showInOrders ?? true ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
-                          product.showInOrders ?? true ? 'translate-x-6' : 'translate-x-1'
+              {productsWithStock.map(product => {
+                const isEditing = editingProductId === product.id;
+                const discountedPrice = product.sellingPrice * (1 - (product.discount || 0) / 100);
+
+                return (
+                  <tr key={product.id} className="hover:bg-muted dark:hover:bg-dark-muted">
+                    <td className="px-2 py-2 w-20">
+                      {isEditing ?
+                        <input type="text" name="imageUrl" value={editedProductData.imageUrl || ''} onChange={handleEditInputChange} className={inputClass} placeholder="URL de l'image" />
+                        : <img src={product.imageUrl} alt={product.name} className="h-12 w-12 object-cover rounded-md" />
+                      }
+                    </td>
+                    <td className="px-2 py-2 font-mono text-muted-foreground min-w-[100px]">{product.id}</td>
+                    <td className="px-2 py-2 font-medium min-w-[200px]">
+                      {isEditing ? <input type="text" name="name" value={editedProductData.name || ''} onChange={handleEditInputChange} className={inputClass} /> : product.name}
+                    </td>
+                    <td className="px-2 py-2 text-right min-w-[100px]">
+                      {isEditing ? <input type="number" name="initialStock" value={editedProductData.initialStock || 0} onChange={handleEditInputChange} className={inputNumberClass} /> : product.initialStock}
+                    </td>
+                    <td className="px-2 py-2 text-right font-semibold">{product.stockReel}</td>
+                    <td className={`px-2 py-2 text-right font-semibold ${product.stockDisponible > 10 ? 'text-green-600 dark:text-green-400' : 'text-orange-500 dark:text-orange-400'}`}>{product.stockDisponible}</td>
+                    <td className="px-2 py-2 text-right min-w-[120px]">
+                      {isEditing ? <input type="number" name="purchasePrice" value={editedProductData.purchasePrice || 0} onChange={handleEditInputChange} className={inputNumberClass} step="0.01" /> : formatCurrency(product.purchasePrice)}
+                    </td>
+                    <td className="px-2 py-2 text-right min-w-[120px]">
+                      {isEditing ? <input type="number" name="sellingPrice" value={editedProductData.sellingPrice || 0} onChange={handleEditInputChange} className={inputNumberClass} step="0.01" /> : formatCurrency(product.sellingPrice)}
+                    </td>
+                     <td className="px-2 py-2 text-right min-w-[100px]">
+                      {isEditing ? (
+                        <div className="relative">
+                           <input type="number" name="discount" value={editedProductData.discount || 0} onChange={handleEditInputChange} className={inputNumberClass} step="0.01" />
+                           <span className="absolute inset-y-0 right-0 pr-3 flex items-center text-sm text-gray-500 pointer-events-none">%</span>
+                        </div>
+                      ) : `${product.discount || 0}%`}
+                    </td>
+                    <td className="px-2 py-2 text-right font-bold text-blue-600 dark:text-blue-400">{formatCurrency(discountedPrice)}</td>
+                    <td className="px-2 py-2 text-center">
+                      <div
+                        onClick={() => !isEditing && handleToggleShowInOrders(product.id)}
+                        className={`relative inline-flex items-center h-6 rounded-full w-11 transition-colors ${isEditing ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'} ${
+                            product.showInOrders ?? true ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
                         }`}
-                      />
-                    </div>
-                  </td>
-                   <td className="px-4 py-2 text-center">
-                    <button
-                      onClick={() => handleDeleteProduct(product.id)}
-                      className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md"
-                      title="Supprimer"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-                  </td>
-                </tr>
-              ))}
+                      >
+                        <span
+                          className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${
+                            product.showInOrders ?? true ? 'translate-x-6' : 'translate-x-1'
+                          }`}
+                        />
+                      </div>
+                    </td>
+                    <td className="px-2 py-2 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                        {isEditing ? (
+                          <>
+                            <button onClick={handleSaveEdit} className="p-1.5 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/50 rounded-md" title="Sauvegarder"><Save size={16} /></button>
+                            <button onClick={handleCancelEdit} className="p-1.5 text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md" title="Annuler"><X size={16} /></button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => handleEditClick(product)} className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md" title="Modifier"><Edit size={16} /></button>
+                            <button onClick={() => handleDeleteProduct(product.id)} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md" title="Supprimer"><Trash2 size={16} /></button>
+                          </>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                )
+            })}
             </tbody>
           </table>
         </div>

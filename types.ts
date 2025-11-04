@@ -57,6 +57,9 @@ export interface Order {
   address: string;
   price: number;
   product: string;
+  size?: string;
+  color?: string;
+  discount?: number;
   statut: Statut;
   assignedUserId: string | null;
   noteClient: string;
@@ -78,6 +81,7 @@ export interface Product {
   purchasePrice: number; // Prix d'achat
   sellingPrice: number; // Prix de vente
   showInOrders?: boolean;
+  discount?: number;
 }
 
 export enum View {
@@ -107,6 +111,7 @@ export interface MessageTemplate {
 export type StatutMessageTemplates = Record<Statut, MessageTemplate>;
 export type RamassageMessageTemplates = Record<Ramassage, MessageTemplate>;
 export type LivraisonMessageTemplates = Record<Livraison, MessageTemplate>;
+// FIX: Corrected typo from Remboursemest to Remboursement.
 export type RemboursementMessageTemplates = Record<Remboursement, MessageTemplate>;
 export type CommandeRetourMessageTemplates = Record<CommandeRetour, MessageTemplate>;
 

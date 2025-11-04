@@ -9,15 +9,16 @@ interface AddProductModalProps {
 }
 
 const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onAddProduct }) => {
-  const initialFormState: Product = {
+  const initialFormState: Omit<Product, 'showInOrders'> = {
     id: '',
     name: '',
     imageUrl: '',
     initialStock: 0,
     purchasePrice: 0,
     sellingPrice: 0,
+    discount: 0,
   };
-  const [formData, setFormData] = useState<Product>(initialFormState);
+  const [formData, setFormData] = useState<Omit<Product, 'showInOrders'>>(initialFormState);
   const [error, setError] = useState('');
 
   if (!isOpen) return null;
@@ -26,7 +27,7 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onAd
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: ['initialStock', 'purchasePrice', 'sellingPrice'].includes(name) ? parseFloat(value) || 0 : value,
+      [name]: ['initialStock', 'purchasePrice', 'sellingPrice', 'discount'].includes(name) ? parseFloat(value) || 0 : value,
     }));
   };
   
@@ -102,14 +103,20 @@ const AddProductModal: React.FC<AddProductModalProps> = ({ isOpen, onClose, onAd
             <label className="block text-sm font-medium">Stock initial</label>
             <input type="number" name="initialStock" value={formData.initialStock} onChange={handleChange} className="w-full mt-1 input-style" min="0" />
           </div>
-           <div>
-            <label className="block text-sm font-medium">Prix de Vente *</label>
-            <input type="number" name="sellingPrice" value={formData.sellingPrice} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Prix d'Achat</label>
-            <input type="number" name="purchasePrice" value={formData.purchasePrice} onChange={handleChange} className="w-full mt-1 input-style" min="0" step="0.01" />
-          </div>
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               <div>
+                <label className="block text-sm font-medium">Prix de Vente *</label>
+                <input type="number" name="sellingPrice" value={formData.sellingPrice} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium">Prix d'Achat</label>
+                <input type="number" name="purchasePrice" value={formData.purchasePrice} onChange={handleChange} className="w-full mt-1 input-style" min="0" step="0.01" />
+              </div>
+            </div>
+             <div>
+                <label className="block text-sm font-medium">Remise (%)</label>
+                <input type="number" name="discount" value={formData.discount || 0} onChange={handleChange} className="w-full mt-1 input-style" min="0" step="0.01" />
+            </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
            <style>{`.input-style { padding: 0.5rem; border-radius: 0.375rem; background-color: transparent; border: 1px solid hsl(215, 20.2%, 65.1%); } .input-style:focus { outline: 2px solid #3b82f6; outline-offset: 2px; }`}</style>
         </form>

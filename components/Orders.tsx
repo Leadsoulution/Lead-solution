@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product } from '../types';
-import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle } from 'lucide-react';
+import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle, Trash2 } from 'lucide-react';
 import ColorSelector from './ColorSelector';
 import { useAuth } from '../contexts/AuthContext';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -78,6 +78,19 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     );
   };
   
+  const handleProductChange = (orderId: string, newProductName: string) => {
+    const newProduct = products.find(p => p.name === newProductName);
+    if (newProduct) {
+      setOrders(prevOrders =>
+        prevOrders.map(order =>
+          order.id === orderId
+            ? { ...order, product: newProductName, price: newProduct.sellingPrice, discount: 0 }
+            : order
+        )
+      );
+    }
+  };
+
    const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
     setFilters(prev => ({ ...prev, [filterName]: value }));
   };
@@ -132,6 +145,9 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       product: newOrderData.product,
       noteClient: newOrderData.noteClient,
       noteObligatoire: newOrderData.noteObligatoire,
+      size: newOrderData.size,
+      color: newOrderData.color,
+      discount: newOrderData.discount,
 
       // Default values
       id: `manual-${Date.now()}`,
@@ -222,11 +238,18 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     setIsAddProductModalOpen(false);
     setNotification({ type: 'success', message: 'Produit ajouté avec succès !' });
   };
+  
+  const handleDeleteOrder = (orderId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer cette commande ?')) {
+        setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+        setNotification({ type: 'success', message: 'Commande supprimée avec succès.' });
+    }
+  };
 
   const renderInput = (order: Order, field: keyof Order, placeholder: string) => (
       <input
           type="text"
-          value={order[field] as string}
+          value={order[field] as string || ''}
           onChange={(e) => handleUpdateOrder(order.id, field, e.target.value)}
           placeholder={placeholder}
           className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
@@ -265,9 +288,9 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     }
   
     const headers = [
-      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Prix', 'Produit', 
+      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Produit', 'Taille', 'Couleur', 'Prix', 'Remise', 'Prix Remisé',
       'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Ramassage', 'Livraison', 
-      'Société de Livraison', 'Remboursement', 'Commande retour', 'Note Obligatoire', 'Appels'
+      'Société de Livraison', 'Remboursement', 'Commande retour', 'Appels'
     ];
   
     const escapeCSV = (val: any): string => {
@@ -281,6 +304,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     const rows = filteredOrders.map(order => {
       const assignedUser = users.find(u => u.id === order.assignedUserId)?.username || 'Non assigné';
       const deliveryCompany = deliveryCompanies.find(c => c.id === order.deliveryCompanyId)?.name || 'Non assigné';
+      const discountedPrice = order.price - (order.discount || 0);
       
       return [
         escapeCSV(order.id),
@@ -288,8 +312,12 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         escapeCSV(order.customerName),
         escapeCSV(order.customerPhone),
         escapeCSV(order.address),
-        escapeCSV(order.price),
         escapeCSV(order.product),
+        escapeCSV(order.size),
+        escapeCSV(order.color),
+        escapeCSV(order.price),
+        escapeCSV(order.discount),
+        escapeCSV(discountedPrice),
         escapeCSV(order.statut),
         escapeCSV(assignedUser),
         escapeCSV(order.noteClient),
@@ -298,7 +326,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         escapeCSV(deliveryCompany),
         escapeCSV(order.remboursement),
         escapeCSV(order.commandeRetour),
-        escapeCSV(order.noteObligatoire),
         escapeCSV(order.callCount),
       ].join(',');
     });
@@ -513,8 +540,12 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.info}`}>Client</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Téléphone</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Adresse</th>
-                <th className={`p-2 border ${headerStyles.info}`}>Prix</th>
                 <th className={`p-2 border ${headerStyles.info}`}>PRODUIT</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Tailles</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Couleurs</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Prix</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Remise</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Prix Remisé</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Appel / fois</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Confirmation</th>
                 <th className={`p-2 border ${headerStyles.status}`}>User</th>
@@ -524,12 +555,9 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Ramassage</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Société de Livraison</th>
-                <th className={`p-2 border ${headerStyles.actions}`}>Message de Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Remboursement</th>
-                <th className={`p-2 border ${headerStyles.actions}`}>Msg Remboursement</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Commande retour</th>
-                <th className={`p-2 border ${headerStyles.actions}`}>Msg Commande retour</th>
-                <th className={`p-2 border ${headerStyles.status}`}>Note Obligatoire</th>
+                <th className={`p-2 border ${headerStyles.actions}`}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -541,7 +569,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                       <td className="p-1 border min-w-[150px]">{order.customerName}</td>
                       <td className="p-1 border min-w-[120px]">{order.customerPhone}</td>
                       <td className="p-1 border min-w-[200px]">{order.address}</td>
-                      <td className="p-1 border min-w-[80px] text-right">{formatCurrency(order.price)}</td>
                       <td className="p-1 border min-w-[200px]">
                         <div className="flex items-center gap-2">
                             {product ? (
@@ -549,8 +576,48 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             ) : (
                                 <div className="h-10 w-10 bg-secondary dark:bg-dark-secondary rounded-md flex-shrink-0"></div>
                             )}
-                            <span className="font-medium">{order.product}</span>
+                             <select
+                                value={order.product}
+                                onChange={(e) => handleProductChange(order.id, e.target.value)}
+                                className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
+                              >
+                                  <option value="" disabled>-- Sélectionner --</option>
+                                  {products.map(p => (
+                                      <option key={p.id} value={p.name}>{p.name}</option>
+                                  ))}
+                              </select>
                         </div>
+                      </td>
+                      <td className="p-1 border min-w-[100px]">{renderInput(order, 'size', 'Taille')}</td>
+                       <td className="p-1 border min-w-[150px]">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={order.color || ''}
+                            onChange={(e) => handleUpdateOrder(order.id, 'color', e.target.value)}
+                            placeholder="Couleur"
+                            className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
+                          />
+                          <div className="flex gap-1 flex-shrink-0">
+                            {order.color?.split(/[, ]+/).filter(c => c.trim() !== '').map((color, index) => (
+                              <div key={index} title={color} className="w-4 h-4 rounded-sm border" style={{ backgroundColor: color.trim() }}></div>
+                            ))}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-1 border min-w-[80px] text-right">{formatCurrency(order.price)}</td>
+                      <td className="p-1 border min-w-[80px]">
+                        <input
+                          type="number"
+                          value={order.discount || ''}
+                          onChange={(e) => handleUpdateOrder(order.id, 'discount', parseFloat(e.target.value) || 0)}
+                          placeholder="Remise"
+                          className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs text-right"
+                          step="0.01"
+                        />
+                      </td>
+                      <td className="p-1 border min-w-[90px] text-right font-semibold">
+                        {formatCurrency(order.price - (order.discount || 0))}
                       </td>
                       <td className={`p-1 border min-w-[120px]`}>
                         <div className="flex items-center justify-center gap-2">
@@ -572,7 +639,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                           category="statut"
                         />
                       </td>
-                      <td className="p-1 border min-w-[150px]">
+                      <td className="p-1 border min-w-[120px]">
                         <select
                             value={order.assignedUserId || ''}
                             onChange={(e) => handleUpdateOrder(order.id, 'assignedUserId', e.target.value || null)}
@@ -611,7 +678,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             {deliveryCompanies.map(company => ( <option key={company.id} value={company.id}>{company.name}</option> ))}
                         </select>
                       </td>
-                       <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'livraison')}</td>
                       <td className="p-1 border min-w-[120px]">
                         <ColorSelector
                             value={order.remboursement}
@@ -620,7 +686,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             category="remboursement"
                         />
                       </td>
-                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'remboursement')}</td>
                       <td className="p-1 border min-w-[150px]">
                          <ColorSelector
                             value={order.commandeRetour}
@@ -629,8 +694,15 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             category="commandeRetour"
                         />
                       </td>
-                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'commandeRetour')}</td>
-                      <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteObligatoire', 'Note...')}</td>
+                      <td className="p-1 border text-center">
+                        <button
+                          onClick={() => handleDeleteOrder(order.id)}
+                          className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md"
+                          title="Supprimer la commande"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
                     </tr>
                 )})}
             </tbody>

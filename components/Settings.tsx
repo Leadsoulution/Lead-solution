@@ -283,8 +283,6 @@ const Settings: React.FC = () => {
                 <MessageSettingsSection title="Messages de Confirmation" category="statut" options={Statut} />
                 <MessageSettingsSection title="Messages de Ramassage" category="ramassage" options={Ramassage} />
                 <MessageSettingsSection title="Messages de Livraison" category="livraison" options={Livraison} />
-                <MessageSettingsSection title="Messages de Remboursement" category="remboursement" options={Remboursement} />
-                <MessageSettingsSection title="Messages de Commande retour" category="commandeRetour" options={CommandeRetour} />
              </div>
              <div className="flex justify-end items-center mt-6">
                 {showSaveConfirmation && <span className="text-sm text-green-600 mr-4">Modèles sauvegardés !</span>}
