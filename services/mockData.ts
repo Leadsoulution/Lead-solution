@@ -1,5 +1,4 @@
-
-import { Order, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, Product } from '../types';
+import { Order, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, Product, Client } from '../types';
 
 const generateRandomDate = (start: Date, end: Date): string => {
   return new Date(start.getTime() + Math.random() * (end.getTime() - start.getTime())).toISOString();
@@ -22,7 +21,7 @@ export const mockProducts: Product[] = [
   {
     id: 'LW-001',
     name: 'Leather Wallet',
-    imageUrl: 'https://images.unsplash.com/photo-1613482193504-2b73335de9a3?q=80&w=1974&auto=format&fit=crop',
+    imageUrl: 'https://images.unsplash.com/photo-1613482193504-2b733335de9a3?q=80&w=1974&auto=format&fit=crop',
     initialStock: 200,
     purchasePrice: 15.00,
     sellingPrice: 49.50,
@@ -177,3 +176,19 @@ export const mockOrders: Order[] = [
     callCount: 1,
   },
 ];
+
+
+// Create mock clients from mock orders to ensure consistency
+const clientsFromOrders = new Map<string, Client>();
+mockOrders.forEach(order => {
+  if (!clientsFromOrders.has(order.customerPhone)) {
+    clientsFromOrders.set(order.customerPhone, {
+      id: `client-${order.customerPhone}`,
+      name: order.customerName,
+      phone: order.customerPhone,
+      address: order.address
+    });
+  }
+});
+
+export const mockClients: Client[] = Array.from(clientsFromOrders.values());

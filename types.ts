@@ -75,6 +75,13 @@ export interface Product {
   discount?: number;
 }
 
+export interface Client {
+  id: string;
+  name: string;
+  phone: string;
+  address: string;
+}
+
 export enum View {
     Dashboard = 'Dashboard',
     Products = 'Products',
@@ -83,6 +90,7 @@ export enum View {
     Settings = 'Settings',
     AdminPanel = 'AdminPanel',
     Integrations = 'Integrations',
+    Clients = 'Clients',
 }
 
 export interface StatCardProps {
@@ -160,9 +168,4 @@ export interface IntegrationSettings {
   storeUrl: string;
   apiKey: string;
   apiSecret: string;
-}
-// FIX: Add DeliveryCompany interface to support delivery company management.
-export interface DeliveryCompany {
-  id: string;
-  name: string;
 }

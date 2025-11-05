@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
-// FIX: Import DeliveryCompany type to support delivery company management.
-import { User, Role, DeliveryCompany } from '../types';
+import { User, Role } from '../types';
 
 interface AuthContextType {
   currentUser: User | null;
@@ -10,11 +9,6 @@ interface AuthContextType {
   createUser: (username: string, password: string, role: Role, assignedProductIds: string[]) => { success: boolean, message: string };
   updateUser: (userId: string, updatedData: Partial<User>) => { success: boolean, message: string };
   deleteUser: (userId: string) => void;
-  // FIX: Add properties for delivery company management.
-  deliveryCompanies: DeliveryCompany[];
-  addDeliveryCompany: (name: string) => { success: boolean, message: string };
-  updateDeliveryCompany: (id: string, name: string) => void;
-  deleteDeliveryCompany: (id: string) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -51,16 +45,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   });
 
-  // FIX: Add state for delivery companies and persist to localStorage.
-  const [deliveryCompanies, setDeliveryCompanies] = useState<DeliveryCompany[]>(() => {
-    try {
-      const savedCompanies = localStorage.getItem('deliveryCompanies');
-      return savedCompanies ? JSON.parse(savedCompanies) : [];
-    } catch (e) {
-      return [];
-    }
-  });
-
   useEffect(() => {
     try {
       localStorage.setItem('users', JSON.stringify(users));
@@ -68,15 +52,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
       console.error("Failed to save users to local storage", error);
     }
   }, [users]);
-  
-  // FIX: Persist delivery companies to localStorage on change.
-  useEffect(() => {
-    try {
-      localStorage.setItem('deliveryCompanies', JSON.stringify(deliveryCompanies));
-    } catch (error) {
-      console.error("Failed to save delivery companies to local storage", error);
-    }
-  }, [deliveryCompanies]);
   
   // When current user data is updated by an admin, update it in state and localStorage as well.
   useEffect(() => {
@@ -151,37 +126,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     }
   };
   
-  // FIX: Implement functions to manage delivery companies.
-  const addDeliveryCompany = (name: string): { success: boolean, message: string } => {
-    if (!name.trim()) {
-        return { success: false, message: 'Le nom de la société ne peut pas être vide.' };
-    }
-    if (deliveryCompanies.some(c => c.name.toLowerCase() === name.toLowerCase())) {
-        return { success: false, message: 'Cette société de livraison existe déjà.' };
-    }
-    const newCompany: DeliveryCompany = {
-        id: `dc-${new Date().getTime()}`,
-        name: name.trim(),
-    };
-    setDeliveryCompanies(prev => [...prev, newCompany]);
-    return { success: true, message: 'Société de livraison ajoutée.' };
-  };
-
-  const updateDeliveryCompany = (id: string, name: string) => {
-    setDeliveryCompanies(prev =>
-        prev.map(c => (c.id === id ? { ...c, name: name.trim() } : c))
-    );
-  };
-
-  const deleteDeliveryCompany = (id: string) => {
-    if (window.confirm("Êtes-vous sûr de vouloir supprimer cette société de livraison ?")) {
-      setDeliveryCompanies(prev => prev.filter(c => c.id !== id));
-    }
-  };
-  
   return (
-    // FIX: Provide delivery company management functions through the context.
-    <AuthContext.Provider value={{ currentUser, users, login, logout, createUser, updateUser, deleteUser, deliveryCompanies, addDeliveryCompany, updateDeliveryCompany, deleteDeliveryCompany }}>
+    <AuthContext.Provider value={{ currentUser, users, login, logout, createUser, updateUser, deleteUser }}>
       {children}
     </AuthContext.Provider>
   );

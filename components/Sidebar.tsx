@@ -1,8 +1,7 @@
-
 import React from 'react';
 import { View, Role } from '../types';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -22,6 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
     { view: View.Dashboard, icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard' },
     { view: View.Products, icon: <Package className="h-5 w-5" />, label: 'Products' },
     { view: View.Orders, icon: <ShoppingCart className="h-5 w-5" />, label: 'Orders' },
+    { view: View.Clients, icon: <Users className="h-5 w-5" />, label: 'Clients' },
     { view: View.Statistics, icon: <BarChart3 className="h-5 w-5" />, label: 'Statistiques' },
     { view: View.Settings, icon: <Settings className="h-5 w-5" />, label: 'Settings' },
   ].filter(item => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -8,11 +7,12 @@ import Settings from './components/Settings';
 import Statistics from './components/Statistics';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
-import { View, Role, Order, Product } from './types';
+import Clients from './components/Clients';
+import { View, Role, Order, Product, Client } from './types';
 import { Menu, X } from 'lucide-react';
 import { CustomizationProvider } from './contexts/CustomizationContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { mockOrders, mockProducts } from './services/mockData';
+import { mockOrders, mockProducts, mockClients } from './services/mockData';
 import Integrations from './components/Integrations';
 import { IntegrationsProvider } from './contexts/IntegrationsContext';
 
@@ -26,6 +26,8 @@ const DashboardLayout: React.FC = () => {
   });
   const [orders, setOrders] = useState<Order[]>(() => JSON.parse(JSON.stringify(mockOrders)));
   const [products, setProducts] = useState<Product[]>(() => JSON.parse(JSON.stringify(mockProducts)));
+  const [clients, setClients] = useState<Client[]>(() => JSON.parse(JSON.stringify(mockClients)));
+
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
       return localStorage.getItem('theme') === 'dark' || 
@@ -46,6 +48,27 @@ const DashboardLayout: React.FC = () => {
       localStorage.setItem('theme', 'light');
     }
   }, [isDarkMode]);
+  
+  // Auto-create clients from orders if they don't exist
+  useEffect(() => {
+    const existingClientPhones = new Set(clients.map(c => c.phone));
+    const newClients: Client[] = [];
+    orders.forEach(order => {
+      if (order.customerPhone && !existingClientPhones.has(order.customerPhone)) {
+        newClients.push({
+          id: `client-${order.customerPhone}`,
+          name: order.customerName,
+          phone: order.customerPhone,
+          address: order.address,
+        });
+        existingClientPhones.add(order.customerPhone); // Prevent duplicates in the same run
+      }
+    });
+    if (newClients.length > 0) {
+      setClients(prev => [...prev, ...newClients]);
+    }
+  }, [orders]);
+
 
   const renderView = () => {
     const isAdmin = currentUser?.role === Role.Admin;
@@ -56,6 +79,8 @@ const DashboardLayout: React.FC = () => {
         return <Products orders={orders} products={products} setProducts={setProducts} />;
       case View.Orders:
         return <Orders orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} />;
+      case View.Clients:
+        return <Clients clients={clients} setClients={setClients} orders={orders} />;
       case View.Statistics:
         return <Statistics orders={orders} />;
       case View.Settings:
