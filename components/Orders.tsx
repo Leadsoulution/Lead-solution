@@ -1,5 +1,6 @@
+
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product } from '../types';
+import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product, Role } from '../types';
 import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle, Trash2 } from 'lucide-react';
 import ColorSelector from './ColorSelector';
 import { useAuth } from '../contexts/AuthContext';
@@ -18,7 +19,7 @@ interface OrdersProps {
 
 const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const { users, deliveryCompanies } = useAuth();
+  const { users, currentUser } = useAuth();
   const { messageTemplates, formatCurrency } = useCustomization();
   const [isAddOrderModalOpen, setIsAddOrderModalOpen] = useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
@@ -50,7 +51,24 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
 
 
   const filteredOrders = useMemo(() => {
-    return orders
+    let ordersToFilter = orders;
+
+    // Filter for User and Confirmation roles based on assigned products
+    if (currentUser?.role === Role.User || currentUser?.role === Role.Confirmation) {
+        if (currentUser.assignedProductIds && currentUser.assignedProductIds.length > 0) {
+            const allowedProductNames = new Set(
+                products
+                    .filter(p => currentUser.assignedProductIds.includes(p.id))
+                    .map(p => p.name)
+            );
+            ordersToFilter = ordersToFilter.filter(order => allowedProductNames.has(order.product));
+        } else {
+            // If no products are assigned, they see no orders.
+            return [];
+        }
+    }
+
+    return ordersToFilter
       .filter(order => {
         if (selectedProductFilter && order.product !== selectedProductFilter) return false;
         if (filters.statut && order.statut !== filters.statut) return false;
@@ -68,13 +86,26 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         order.customerPhone.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.id.toLowerCase().includes(searchTerm.toLowerCase())
       );
-  }, [orders, searchTerm, filters, selectedProductFilter]);
+  }, [orders, searchTerm, filters, selectedProductFilter, currentUser, products]);
 
   const handleUpdateOrder = (orderId: string, field: keyof Order, value: any) => {
     setOrders(prevOrders =>
-      prevOrders.map(order =>
-        order.id === orderId ? { ...order, [field]: value } : order
-      )
+      prevOrders.map(order => {
+        if (order.id === orderId) {
+          const updatedOrder = { ...order, [field]: value };
+          // Auto-assign user on confirmation or recall for unassigned orders
+          if (
+            field === 'statut' &&
+            !order.assignedUserId &&
+            (value === Statut.Confirme || value === Statut.Rappel) &&
+            (currentUser?.role === Role.User || currentUser?.role === Role.Confirmation)
+          ) {
+            updatedOrder.assignedUserId = currentUser.id;
+          }
+          return updatedOrder;
+        }
+        return order;
+      })
     );
   };
   
@@ -84,7 +115,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       setOrders(prevOrders =>
         prevOrders.map(order =>
           order.id === orderId
-            ? { ...order, product: newProductName, price: newProduct.sellingPrice, discount: 0 }
+            ? { ...order, product: newProductName, price: newProduct.sellingPrice }
             : order
         )
       );
@@ -135,7 +166,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
   };
   
-  const handleAddOrder = (newOrderData: Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount' | 'deliveryCompanyId'>) => {
+  const handleAddOrder = (newOrderData: Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount'>) => {
     const newOrder: Order = {
       // Data from form
       customerName: newOrderData.customerName,
@@ -145,9 +176,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       product: newOrderData.product,
       noteClient: newOrderData.noteClient,
       noteObligatoire: newOrderData.noteObligatoire,
-      size: newOrderData.size,
-      color: newOrderData.color,
-      discount: newOrderData.discount,
 
       // Default values
       id: `manual-${Date.now()}`,
@@ -159,7 +187,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       remboursement: Remboursement.NonDefini,
       commandeRetour: CommandeRetour.NonDefini,
       assignedUserId: null,
-      deliveryCompanyId: null,
       callCount: 0,
     };
     setOrders(prev => [newOrder, ...prev]);
@@ -210,7 +237,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     livraison: Livraison.PasDeReponse,
                     remboursement: Remboursement.NonPayer,
                     commandeRetour: CommandeRetour.NonRetourne,
-                    deliveryCompanyId: null,
                     callCount: 0,
                 };
             });
@@ -246,13 +272,14 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     }
   };
 
-  const renderInput = (order: Order, field: keyof Order, placeholder: string) => (
+  const renderInput = (order: Order, field: keyof Order, placeholder: string, disabled: boolean) => (
       <input
           type="text"
           value={order[field] as string || ''}
           onChange={(e) => handleUpdateOrder(order.id, field, e.target.value)}
           placeholder={placeholder}
-          className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
+          className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={disabled}
       />
   );
   
@@ -288,9 +315,9 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     }
   
     const headers = [
-      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Produit', 'Taille', 'Couleur', 'Prix', 'Remise', 'Prix Remisé',
-      'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Ramassage', 'Livraison', 
-      'Société de Livraison', 'Remboursement', 'Commande retour', 'Appels'
+      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Produit', 'Prix',
+      'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Note Obligatoire', 'Ramassage', 'Livraison', 
+      'Remboursement', 'Commande retour', 'Appels'
     ];
   
     const escapeCSV = (val: any): string => {
@@ -303,8 +330,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   
     const rows = filteredOrders.map(order => {
       const assignedUser = users.find(u => u.id === order.assignedUserId)?.username || 'Non assigné';
-      const deliveryCompany = deliveryCompanies.find(c => c.id === order.deliveryCompanyId)?.name || 'Non assigné';
-      const discountedPrice = order.price - (order.discount || 0);
       
       return [
         escapeCSV(order.id),
@@ -313,17 +338,13 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         escapeCSV(order.customerPhone),
         escapeCSV(order.address),
         escapeCSV(order.product),
-        escapeCSV(order.size),
-        escapeCSV(order.color),
         escapeCSV(order.price),
-        escapeCSV(order.discount),
-        escapeCSV(discountedPrice),
         escapeCSV(order.statut),
         escapeCSV(assignedUser),
         escapeCSV(order.noteClient),
+        escapeCSV(order.noteObligatoire),
         escapeCSV(order.ramassage),
         escapeCSV(order.livraison),
-        escapeCSV(deliveryCompany),
         escapeCSV(order.remboursement),
         escapeCSV(order.commandeRetour),
         escapeCSV(order.callCount),
@@ -541,20 +562,16 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.info}`}>Téléphone</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Adresse</th>
                 <th className={`p-2 border ${headerStyles.info}`}>PRODUIT</th>
-                <th className={`p-2 border ${headerStyles.info}`}>Tailles</th>
-                <th className={`p-2 border ${headerStyles.info}`}>Couleurs</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Prix</th>
-                <th className={`p-2 border ${headerStyles.info}`}>Remise</th>
-                <th className={`p-2 border ${headerStyles.info}`}>Prix Remisé</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Appel / fois</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Confirmation</th>
                 <th className={`p-2 border ${headerStyles.status}`}>User</th>
                 <th className={`p-2 border ${headerStyles.status}`}>NOTE DU CLIENT</th>
+                <th className={`p-2 border ${headerStyles.status}`}>NOTE OBLIGATOIRE</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Msg de Confirmation</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Ramassage</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Ramassage</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Livraison</th>
-                <th className={`p-2 border ${headerStyles.status}`}>Société de Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Remboursement</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Commande retour</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Actions</th>
@@ -563,12 +580,17 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
             <tbody>
               {filteredOrders.map(order => {
                   const product = products.find(p => p.name === order.product);
+                  const isEditable = currentUser?.role === Role.Admin || !order.assignedUserId || order.assignedUserId === currentUser?.id;
+                  const isStatusLocked = !!order.assignedUserId &&
+                      order.assignedUserId !== currentUser?.id &&
+                      currentUser?.role !== Role.Admin &&
+                      (order.statut === Statut.Confirme || order.statut === Statut.Rappel);
                   return (
                     <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
                       <td className="p-1 border min-w-[100px]">{new Date(order.date).toLocaleDateString('fr-FR')}</td>
-                      <td className="p-1 border min-w-[150px]">{order.customerName}</td>
-                      <td className="p-1 border min-w-[120px]">{order.customerPhone}</td>
-                      <td className="p-1 border min-w-[200px]">{order.address}</td>
+                      <td className="p-1 border min-w-[150px]">{renderInput(order, 'customerName', 'Nom...', !isEditable)}</td>
+                      <td className="p-1 border min-w-[120px]">{renderInput(order, 'customerPhone', 'Téléphone...', !isEditable)}</td>
+                      <td className="p-1 border min-w-[200px]">{renderInput(order, 'address', 'Adresse...', !isEditable)}</td>
                       <td className="p-1 border min-w-[200px]">
                         <div className="flex items-center gap-2">
                             {product ? (
@@ -579,7 +601,8 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                              <select
                                 value={order.product}
                                 onChange={(e) => handleProductChange(order.id, e.target.value)}
-                                className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
+                                className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={!isEditable}
                               >
                                   <option value="" disabled>-- Sélectionner --</option>
                                   {products.map(p => (
@@ -588,36 +611,15 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                               </select>
                         </div>
                       </td>
-                      <td className="p-1 border min-w-[100px]">{renderInput(order, 'size', 'Taille')}</td>
-                       <td className="p-1 border min-w-[150px]">
-                        <div className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={order.color || ''}
-                            onChange={(e) => handleUpdateOrder(order.id, 'color', e.target.value)}
-                            placeholder="Couleur"
-                            className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
-                          />
-                          <div className="flex gap-1 flex-shrink-0">
-                            {order.color?.split(/[, ]+/).filter(c => c.trim() !== '').map((color, index) => (
-                              <div key={index} title={color} className="w-4 h-4 rounded-sm border" style={{ backgroundColor: color.trim() }}></div>
-                            ))}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="p-1 border min-w-[80px] text-right">{formatCurrency(order.price)}</td>
-                      <td className="p-1 border min-w-[80px]">
+                      <td className="p-1 border min-w-[100px]">
                         <input
                           type="number"
-                          value={order.discount || ''}
-                          onChange={(e) => handleUpdateOrder(order.id, 'discount', parseFloat(e.target.value) || 0)}
-                          placeholder="Remise"
-                          className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs text-right"
+                          value={order.price}
+                          onChange={(e) => handleUpdateOrder(order.id, 'price', parseFloat(e.target.value) || 0)}
+                          className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs text-right disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={!isEditable}
                           step="0.01"
                         />
-                      </td>
-                      <td className="p-1 border min-w-[90px] text-right font-semibold">
-                        {formatCurrency(order.price - (order.discount || 0))}
                       </td>
                       <td className={`p-1 border min-w-[120px]`}>
                         <div className="flex items-center justify-center gap-2">
@@ -625,7 +627,8 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             <button
                                 onClick={() => handleUpdateOrder(order.id, 'callCount', order.callCount + 1)}
                                 title="Incrémenter le nombre d'appels"
-                                className="p-1.5 rounded-md bg-pink-500 text-white hover:bg-pink-600"
+                                className="p-1.5 rounded-md bg-pink-500 text-white hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                disabled={!isEditable}
                             >
                                 <Phone size={12} />
                             </button>
@@ -637,13 +640,15 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                           onChange={(newValue) => handleUpdateOrder(order.id, 'statut', newValue)}
                           options={Statut}
                           category="statut"
+                          disabled={isStatusLocked}
                         />
                       </td>
                       <td className="p-1 border min-w-[120px]">
                         <select
                             value={order.assignedUserId || ''}
                             onChange={(e) => handleUpdateOrder(order.id, 'assignedUserId', e.target.value || null)}
-                            className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
+                            className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                            disabled={currentUser?.role !== Role.Admin}
                         >
                             <option value="">-- Non assigné --</option>
                             {users.map(user => (
@@ -653,7 +658,8 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             ))}
                         </select>
                       </td>
-                      <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteClient', 'Note...')}</td>
+                      <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteClient', 'Note...', false)}</td>
+                      <td className="p-1 border min-w-[200px] text-xs text-red-600 dark:text-red-400 font-semibold">{order.noteObligatoire}</td>
                       <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'statut')}</td>
                       <td className="p-1 border min-w-[150px]">
                         <ColorSelector
@@ -671,12 +677,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             options={Livraison}
                             category="livraison"
                         />
-                      </td>
-                      <td className="p-1 border min-w-[170px]">
-                        <select value={order.deliveryCompanyId || ''} onChange={(e) => handleUpdateOrder(order.id, 'deliveryCompanyId', e.target.value || null)} className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs">
-                            <option value="">-- Non assigné --</option>
-                            {deliveryCompanies.map(company => ( <option key={company.id} value={company.id}>{company.name}</option> ))}
-                        </select>
                       </td>
                       <td className="p-1 border min-w-[120px]">
                         <ColorSelector
@@ -697,8 +697,9 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                       <td className="p-1 border text-center">
                         <button
                           onClick={() => handleDeleteOrder(order.id)}
-                          className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md"
+                          className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
                           title="Supprimer la commande"
+                          disabled={!isEditable}
                         >
                           <Trash2 size={14} />
                         </button>

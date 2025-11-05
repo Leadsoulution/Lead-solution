@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { useCustomization } from '../contexts/CustomizationContext';
 import { ChevronDown } from 'lucide-react';
@@ -10,9 +9,10 @@ interface ColorSelectorProps<T extends string> {
   onChange: (value: T) => void;
   options: Record<string, T>;
   category: ColorCategory;
+  disabled?: boolean;
 }
 
-const ColorSelector = <T extends string>({ value, onChange, options, category }: ColorSelectorProps<T>) => {
+const ColorSelector = <T extends string>({ value, onChange, options, category, disabled = false }: ColorSelectorProps<T>) => {
   const [isOpen, setIsOpen] = useState(false);
   const { colors } = useCustomization();
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -43,8 +43,9 @@ const ColorSelector = <T extends string>({ value, onChange, options, category }:
     <div className="relative w-full" ref={wrapperRef}>
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
-        className={`w-full flex items-center justify-between p-1.5 border rounded-md focus:ring-1 focus:ring-blue-500 text-xs font-medium ${selectedTextColor}`}
+        onClick={() => !disabled && setIsOpen(!isOpen)}
+        disabled={disabled}
+        className={`w-full flex items-center justify-between p-1.5 border rounded-md focus:ring-1 focus:ring-blue-500 text-xs font-medium ${selectedTextColor} disabled:opacity-50 disabled:cursor-not-allowed`}
         style={{ backgroundColor: selectedColor }}
       >
         <span>{value}</span>

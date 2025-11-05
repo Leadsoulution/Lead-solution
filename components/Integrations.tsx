@@ -1,92 +1,135 @@
 import React, { useState, useEffect } from 'react';
-import { Share2, Code, Zap } from 'lucide-react';
+import { useIntegrations } from '../contexts/IntegrationsContext';
+import { IntegrationSettings, PlatformIntegration } from '../types';
+import { Link, CheckCircle, XCircle, Copy, PowerOff, Power } from 'lucide-react';
 
-interface IntegrationCardProps {
-  title: string;
+interface IntegrationPlatformCardProps {
+  platform: PlatformIntegration;
+  logo: string;
   description: string;
-  icon: React.ReactNode;
-  isEnabled: boolean;
-  onToggle: () => void;
 }
 
-const IntegrationCard: React.FC<IntegrationCardProps> = ({ title, description, icon, isEnabled, onToggle }) => {
+const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platform, logo, description }) => {
+  const { integrations, updateIntegration, getWebhookUrl } = useIntegrations();
+  const settings = integrations[platform];
+  const [formData, setFormData] = useState<Omit<IntegrationSettings, 'platform' | 'isConnected'>>(settings);
+  const [notification, setNotification] = useState<string | null>(null);
+
+  useEffect(() => {
+    setFormData(integrations[platform]);
+  }, [integrations, platform]);
+
+  const handleConnect = () => {
+    // Basic validation
+    if (!formData.storeUrl || !formData.apiKey || !formData.apiSecret) {
+      alert("Veuillez remplir tous les champs : URL du magasin, clé API et secret API.");
+      return;
+    }
+    updateIntegration(platform, { ...formData, isConnected: true });
+  };
+
+  const handleDisconnect = () => {
+    updateIntegration(platform, { isConnected: false });
+  };
+
+  const handleCopyWebhook = () => {
+    navigator.clipboard.writeText(getWebhookUrl(platform));
+    setNotification('URL du Webhook copiée !');
+    setTimeout(() => setNotification(null), 2000);
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const maskedValue = "**************";
+
   return (
-    <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground flex items-center justify-between">
-      <div className="flex items-center gap-4">
-        <div className="bg-accent dark:bg-dark-accent p-3 rounded-lg">{icon}</div>
-        <div>
-          <h3 className="text-xl font-semibold">{title}</h3>
-          <p className="text-muted-foreground dark:text-dark-muted-foreground">{description}</p>
+    <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-md dark:bg-dark-card dark:text-dark-card-foreground space-y-6">
+      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <img src={logo} alt={`${platform} logo`} className="h-12 w-12" />
+          <div>
+            <h3 className="text-xl font-semibold">{platform}</h3>
+            <p className="text-muted-foreground dark:text-dark-muted-foreground text-sm">{description}</p>
+          </div>
+        </div>
+        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium ${settings.isConnected ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
+          {settings.isConnected ? <CheckCircle size={16} /> : <XCircle size={16} />}
+          <span>{settings.isConnected ? 'Connecté' : 'Déconnecté'}</span>
         </div>
       </div>
-      <div
-        onClick={onToggle}
-        className={`relative inline-flex items-center h-6 rounded-full w-11 cursor-pointer transition-colors ${isEnabled ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'}`}
-      >
-        <span
-          className={`inline-block w-4 h-4 transform bg-white rounded-full transition-transform ${isEnabled ? 'translate-x-6' : 'translate-x-1'}`}
-        />
+      
+      <div className="space-y-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">URL du magasin</label>
+          <input type="text" name="storeUrl" value={settings.isConnected ? settings.storeUrl : formData.storeUrl} onChange={handleChange} placeholder="https://votreboutique.com" className="input-style" disabled={settings.isConnected} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Clé API</label>
+          <input type="password" name="apiKey" value={settings.isConnected ? maskedValue : formData.apiKey} onChange={handleChange} className="input-style" disabled={settings.isConnected} />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Secret API</label>
+          <input type="password" name="apiSecret" value={settings.isConnected ? maskedValue : formData.apiSecret} onChange={handleChange} className="input-style" disabled={settings.isConnected} />
+        </div>
       </div>
+
+      <div className="flex justify-end">
+        {settings.isConnected ? (
+          <button onClick={handleDisconnect} className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-red-500 rounded-md hover:bg-red-600">
+            <PowerOff size={16} /> Déconnecter
+          </button>
+        ) : (
+          <button onClick={handleConnect} className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600">
+            <Power size={16} /> Sauvegarder & Connecter
+          </button>
+        )}
+      </div>
+
+      <div className="border-t pt-4 space-y-2 dark:border-gray-700">
+          <h4 className="font-semibold">Intégration par Webhook</h4>
+          <p className="text-xs text-muted-foreground">Copiez cet URL dans les paramètres webhook de votre plateforme pour une synchronisation instantanée des commandes.</p>
+          <div className="relative flex items-center">
+            <input type="text" readOnly value={getWebhookUrl(platform)} className="input-style pr-10" />
+            <button onClick={handleCopyWebhook} className="absolute right-1 top-1/2 -translate-y-1/2 p-2 rounded-md hover:bg-accent dark:hover:bg-dark-accent">
+              <Copy size={16} className="text-muted-foreground" />
+            </button>
+          </div>
+          {notification && <p className="text-xs text-green-600 mt-1">{notification}</p>}
+      </div>
+      <style>{`.input-style { width: 100%; padding: 0.5rem; border-radius: 0.375rem; background-color: transparent; border: 1px solid hsl(215, 20.2%, 65.1%); } .input-style:focus { outline: 2px solid #3b82f6; outline-offset: 2px; } .input-style:disabled { opacity: 0.7; background-color: hsl(210, 40%, 98%); } .dark .input-style:disabled { background-color: hsl(217.2, 32.6%, 22.5%); }`}</style>
     </div>
   );
 };
 
-
 const Integrations: React.FC = () => {
-  const [integrations, setIntegrations] = useState({
-    portal: false,
-    api: false,
-    code: false,
-  });
-
-  useEffect(() => {
-    try {
-      const savedIntegrations = localStorage.getItem('deliveryIntegrations');
-      if (savedIntegrations) {
-        setIntegrations(JSON.parse(savedIntegrations));
-      }
-    } catch (error) {
-      console.error("Failed to load integrations from localStorage", error);
-    }
-  }, []);
-
-  const handleToggle = (key: keyof typeof integrations) => {
-    setIntegrations(prev => {
-      const newState = { ...prev, [key]: !prev[key] };
-      localStorage.setItem('deliveryIntegrations', JSON.stringify(newState));
-      return newState;
-    });
-  };
-
-
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
-       <div>
-        <h1 className="text-3xl font-bold">Intégrations</h1>
-        <p className="text-muted-foreground">Activez et gérez les méthodes d'intégration pour vos sociétés de livraison.</p>
+      <div>
+        <h1 className="text-3xl font-bold flex items-center gap-3">
+          <Link size={28} />
+          Intégrations des Plateformes
+        </h1>
+        <p className="text-muted-foreground">Connectez vos boutiques e-commerce pour synchroniser les commandes automatiquement.</p>
       </div>
 
-      <div className="space-y-4">
-        <IntegrationCard
-            title="Portail Partenaire"
-            description="Intégration via un tableau ou un portail partenaire."
-            icon={<Share2 className="h-6 w-6 text-primary dark:text-dark-primary" />}
-            isEnabled={integrations.portal}
-            onToggle={() => handleToggle('portal')}
+      <div className="space-y-6">
+        <IntegrationPlatformCard
+          platform={PlatformIntegration.Shopify}
+          logo="https://cdn.worldvectorlogo.com/logos/shopify.svg"
+          description="Synchronisez les commandes de votre boutique Shopify."
         />
-        <IntegrationCard
-            title="Intégration API (Automatique)"
-            description="Synchronisation automatique via API."
-            icon={<Zap className="h-6 w-6 text-primary dark:text-dark-primary" />}
-            isEnabled={integrations.api}
-            onToggle={() => handleToggle('api')}
+        <IntegrationPlatformCard
+          platform={PlatformIntegration.WooCommerce}
+          logo="https://cdn.worldvectorlogo.com/logos/woocommerce-logo.svg"
+          description="Connectez votre boutique basée sur WordPress & WooCommerce."
         />
-        <IntegrationCard
-            title="Par Code"
-            description="Intégration via des scripts ou codes de suivi."
-            icon={<Code className="h-6 w-6 text-primary dark:text-dark-primary" />}
-            isEnabled={integrations.code}
-            onToggle={() => handleToggle('code')}
+        <IntegrationPlatformCard
+          platform={PlatformIntegration.YouCan}
+          logo="https://youcan.shop/images/logo.svg"
+          description="Intégrez votre boutique de la plateforme YouCan."
         />
       </div>
     </div>

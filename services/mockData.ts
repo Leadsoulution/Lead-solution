@@ -1,3 +1,4 @@
+
 import { Order, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, Product } from '../types';
 
 const generateRandomDate = (start: Date, end: Date): string => {
@@ -69,9 +70,6 @@ export const mockOrders: Order[] = [
     address: '123 Rue de Paris, 75001 Paris',
     price: 99.99, 
     product: 'Wireless Headphones', 
-    size: 'L',
-    color: 'Black',
-    discount: 10,
     statut: Statut.Confirme, 
     assignedUserId: 'admin-001',
     noteClient: 'Appeler avant de livrer',
@@ -82,7 +80,6 @@ export const mockOrders: Order[] = [
     noteObligatoire: '',
     platform: Platform.Shopify,
     callCount: 2,
-    deliveryCompanyId: null,
   },
   { 
     id: 'WC2001', 
@@ -102,7 +99,6 @@ export const mockOrders: Order[] = [
     noteObligatoire: '',
     platform: Platform.WooCommerce,
     callCount: 3,
-    deliveryCompanyId: null,
   },
     { 
     id: 'SF1002', 
@@ -112,9 +108,6 @@ export const mockOrders: Order[] = [
     address: '78 Boulevard de Marseille, 13008 Marseille',
     price: 249.00, 
     product: 'Smartwatch', 
-    size: 'M',
-    color: 'Silver',
-    discount: 25,
     statut: Statut.Rappel, 
     assignedUserId: 'admin-001',
     noteClient: 'Cadeau, emballage svp',
@@ -125,7 +118,6 @@ export const mockOrders: Order[] = [
     noteObligatoire: '',
     platform: Platform.Shopify,
     callCount: 1,
-    deliveryCompanyId: null,
   },
   { 
     id: 'WC2002', 
@@ -145,7 +137,6 @@ export const mockOrders: Order[] = [
     noteObligatoire: '',
     platform: Platform.WooCommerce,
     callCount: 0,
-    deliveryCompanyId: null,
   },
     { 
     id: 'SF1003', 
@@ -165,7 +156,6 @@ export const mockOrders: Order[] = [
     noteObligatoire: '',
     platform: Platform.Shopify,
     callCount: 1,
-    deliveryCompanyId: null,
   },
   { 
     id: 'WC2003', 
@@ -185,6 +175,5 @@ export const mockOrders: Order[] = [
     noteObligatoire: '',
     platform: Platform.WooCommerce,
     callCount: 1,
-    deliveryCompanyId: null,
   },
 ];

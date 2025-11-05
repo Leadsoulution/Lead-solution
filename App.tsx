@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -11,11 +12,18 @@ import { View, Role, Order, Product } from './types';
 import { Menu, X } from 'lucide-react';
 import { CustomizationProvider } from './contexts/CustomizationContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import DeliveryCompanies from './components/DeliveryCompanies';
 import { mockOrders, mockProducts } from './services/mockData';
+import Integrations from './components/Integrations';
+import { IntegrationsProvider } from './contexts/IntegrationsContext';
 
 const DashboardLayout: React.FC = () => {
-  const [view, setView] = useState<View>(View.Dashboard);
+  const { currentUser } = useAuth();
+  const [view, setView] = useState<View>(() => {
+    if (currentUser?.role === Role.Confirmation) {
+      return View.Orders;
+    }
+    return View.Dashboard;
+  });
   const [orders, setOrders] = useState<Order[]>(() => JSON.parse(JSON.stringify(mockOrders)));
   const [products, setProducts] = useState<Product[]>(() => JSON.parse(JSON.stringify(mockProducts)));
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -27,8 +35,7 @@ const DashboardLayout: React.FC = () => {
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const { currentUser } = useAuth();
-
+  
   useEffect(() => {
     const root = window.document.documentElement;
     if (isDarkMode) {
@@ -54,9 +61,9 @@ const DashboardLayout: React.FC = () => {
       case View.Settings:
         return <Settings />;
       case View.AdminPanel:
-        return isAdmin ? <AdminPanel /> : <Dashboard orders={orders} />;
-      case View.DeliveryCompanies:
-        return isAdmin ? <DeliveryCompanies /> : <Dashboard orders={orders} />;
+        return isAdmin ? <AdminPanel products={products} /> : <Dashboard orders={orders} />;
+      case View.Integrations:
+        return isAdmin ? <Integrations /> : <Dashboard orders={orders} />;
       default:
         return <Dashboard orders={orders}/>;
     }
@@ -110,7 +117,9 @@ const App: React.FC = () => {
   return (
     <CustomizationProvider>
       <AuthProvider>
-        <AppRouter />
+        <IntegrationsProvider>
+          <AppRouter />
+        </IntegrationsProvider>
       </AuthProvider>
     </CustomizationProvider>
   );

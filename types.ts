@@ -44,11 +44,6 @@ export enum CommandeRetour {
   Bloquer = 'Bloquer',
 }
 
-export interface DeliveryCompany {
-  id: string;
-  name: string;
-}
-
 export interface Order {
   id: string;
   date: string;
@@ -57,9 +52,6 @@ export interface Order {
   address: string;
   price: number;
   product: string;
-  size?: string;
-  color?: string;
-  discount?: number;
   statut: Statut;
   assignedUserId: string | null;
   noteClient: string;
@@ -70,7 +62,6 @@ export interface Order {
   noteObligatoire: string;
   platform: Platform;
   callCount: number;
-  deliveryCompanyId: string | null;
 }
 
 export interface Product {
@@ -91,7 +82,7 @@ export enum View {
     Statistics = 'Statistics',
     Settings = 'Settings',
     AdminPanel = 'AdminPanel',
-    DeliveryCompanies = 'DeliveryCompanies',
+    Integrations = 'Integrations',
 }
 
 export interface StatCardProps {
@@ -146,6 +137,7 @@ export type ColorCategory = keyof AllStatusColors;
 export enum Role {
   Admin = 'Admin',
   User = 'User',
+  Confirmation = 'Confirmation',
 }
 
 export interface User {
@@ -153,4 +145,24 @@ export interface User {
   username: string;
   password: string; // Note: In a real app, never store plaintext passwords.
   role: Role;
+  assignedProductIds: string[];
+}
+
+export enum PlatformIntegration {
+  Shopify = 'Shopify',
+  WooCommerce = 'WooCommerce',
+  YouCan = 'YouCan',
+}
+
+export interface IntegrationSettings {
+  platform: PlatformIntegration;
+  isConnected: boolean;
+  storeUrl: string;
+  apiKey: string;
+  apiSecret: string;
+}
+// FIX: Add DeliveryCompany interface to support delivery company management.
+export interface DeliveryCompany {
+  id: string;
+  name: string;
 }

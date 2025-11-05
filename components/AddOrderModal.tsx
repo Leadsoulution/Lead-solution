@@ -1,9 +1,9 @@
+
 import React, { useState } from 'react';
 import { Order, Product } from '../types';
 import { X } from 'lucide-react';
 
-// FIX: Added 'deliveryCompanyId' to the Omit type. New manual orders don't require this field in the modal, as it's set to null by default upon creation.
-type NewOrderData = Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount' | 'deliveryCompanyId'>;
+type NewOrderData = Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount'>;
 
 interface AddOrderModalProps {
   isOpen: boolean;
@@ -21,9 +21,6 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     product: '',
     noteClient: '',
     noteObligatoire: '',
-    size: '',
-    color: '',
-    discount: 0,
   };
   const [formData, setFormData] = useState<NewOrderData>(initialFormState);
   const [error, setError] = useState('');
@@ -34,7 +31,7 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     const { name, value } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: (name === 'price' || name === 'discount') ? parseFloat(value) || 0 : value,
+      [name]: name === 'price' ? parseFloat(value) || 0 : value,
     }));
   };
 
@@ -86,33 +83,13 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
               ))}
             </select>
           </div>
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium">Taille</label>
-                <input type="text" name="size" value={formData.size} onChange={handleChange} className="w-full mt-1 input-style" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium">Couleur</label>
-                <input type="text" name="color" value={formData.color} onChange={handleChange} className="w-full mt-1 input-style" />
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium">Prix *</label>
-                  <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
-                </div>
-                 <div>
-                  <label className="block text-sm font-medium">Remise</label>
-                  <input type="number" name="discount" value={formData.discount} onChange={handleChange} className="w-full mt-1 input-style" min="0" step="0.01" />
-                </div>
-            </div>
+          <div>
+            <label className="block text-sm font-medium">Prix *</label>
+            <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
+          </div>
           <div>
             <label className="block text-sm font-medium">Note du client</label>
             <textarea name="noteClient" value={formData.noteClient} onChange={handleChange} rows={2} className="w-full mt-1 input-style" />
-          </div>
-          <div>
-            <label className="block text-sm font-medium">Note obligatoire</label>
-            <textarea name="noteObligatoire" value={formData.noteObligatoire} onChange={handleChange} rows={2} className="w-full mt-1 input-style" />
           </div>
           {error && <p className="text-sm text-red-500">{error}</p>}
            <style>{`.input-style { padding: 0.5rem; border-radius: 0.375rem; background-color: transparent; border: 1px solid hsl(215, 20.2%, 65.1%); } .input-style:focus { outline: 2px solid #3b82f6; outline-offset: 2px; }`}</style>

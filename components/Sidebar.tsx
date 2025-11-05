@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { View, Role } from '../types';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Truck, Package, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -15,6 +16,7 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, setIsDarkMode, isCollapsed, toggleCollapsed }) => {
   const { currentUser, logout } = useAuth();
+  const isConfirmationUser = currentUser?.role === Role.Confirmation;
 
   const navItems = [
     { view: View.Dashboard, icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard' },
@@ -22,11 +24,16 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
     { view: View.Orders, icon: <ShoppingCart className="h-5 w-5" />, label: 'Orders' },
     { view: View.Statistics, icon: <BarChart3 className="h-5 w-5" />, label: 'Statistiques' },
     { view: View.Settings, icon: <Settings className="h-5 w-5" />, label: 'Settings' },
-  ];
+  ].filter(item => {
+    if (isConfirmationUser) {
+      return item.view === View.Orders;
+    }
+    return true;
+  });
 
   const adminNavItems = [
      { view: View.AdminPanel, icon: <Shield className="h-5 w-5" />, label: 'Admin Panel' },
-     { view: View.DeliveryCompanies, icon: <Truck className="h-5 w-5" />, label: 'Sociétés de Livraison' },
+     { view: View.Integrations, icon: <Link className="h-5 w-5" />, label: 'Integrations' },
   ];
 
   const handleLogout = () => {
