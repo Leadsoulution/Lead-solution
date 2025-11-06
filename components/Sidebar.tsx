@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Role } from '../types';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarProps {
@@ -34,6 +34,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
   const adminNavItems = [
      { view: View.AdminPanel, icon: <Shield className="h-5 w-5" />, label: 'Admin Panel' },
      { view: View.Integrations, icon: <Link className="h-5 w-5" />, label: 'Integrations' },
+     { view: View.Financials, icon: <Landmark className="h-5 w-5" />, label: 'Financials' },
   ];
 
   const handleLogout = () => {

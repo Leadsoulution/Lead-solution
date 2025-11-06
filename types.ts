@@ -59,7 +59,6 @@ export interface Order {
   livraison: Livraison;
   remboursement: Remboursement;
   commandeRetour: CommandeRetour;
-  noteObligatoire: string;
   platform: Platform;
   callCount: number;
 }
@@ -73,6 +72,7 @@ export interface Product {
   sellingPrice: number; // Prix de vente
   showInOrders?: boolean;
   discount?: number;
+  category?: string;
 }
 
 export interface Client {
@@ -91,6 +91,7 @@ export enum View {
     AdminPanel = 'AdminPanel',
     Integrations = 'Integrations',
     Clients = 'Clients',
+    Financials = 'Financials',
 }
 
 export interface StatCardProps {

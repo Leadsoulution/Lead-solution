@@ -8,6 +8,7 @@ import Statistics from './components/Statistics';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import Clients from './components/Clients';
+import Financials from './components/Financials';
 import { View, Role, Order, Product, Client } from './types';
 import { Menu, X } from 'lucide-react';
 import { CustomizationProvider } from './contexts/CustomizationContext';
@@ -89,6 +90,8 @@ const DashboardLayout: React.FC = () => {
         return isAdmin ? <AdminPanel products={products} /> : <Dashboard orders={orders} />;
       case View.Integrations:
         return isAdmin ? <Integrations /> : <Dashboard orders={orders} />;
+      case View.Financials:
+        return isAdmin ? <Financials orders={orders} products={products} /> : <Dashboard orders={orders} />;
       default:
         return <Dashboard orders={orders}/>;
     }

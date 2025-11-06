@@ -20,7 +20,6 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     price: 0,
     product: '',
     noteClient: '',
-    noteObligatoire: '',
   };
   const [formData, setFormData] = useState<NewOrderData>(initialFormState);
   const [error, setError] = useState('');

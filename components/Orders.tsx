@@ -27,6 +27,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedProductFilter, setSelectedProductFilter] = useState<string | null>(null);
+  const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (notification) {
@@ -36,6 +37,10 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       return () => clearTimeout(timer);
     }
   }, [notification]);
+
+  useEffect(() => {
+    setSelectedOrders(new Set());
+  }, [searchTerm, selectedProductFilter]);
 
   const initialFilters = {
     statut: '',
@@ -87,6 +92,26 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         order.id.toLowerCase().includes(searchTerm.toLowerCase())
       );
   }, [orders, searchTerm, filters, selectedProductFilter, currentUser, products]);
+  
+    const handleSelectOrder = (orderId: string) => {
+        setSelectedOrders(prevSelected => {
+            const newSelected = new Set(prevSelected);
+            if (newSelected.has(orderId)) {
+                newSelected.delete(orderId);
+            } else {
+                newSelected.add(orderId);
+            }
+            return newSelected;
+        });
+    };
+
+    const handleSelectAll = () => {
+        if (selectedOrders.size === filteredOrders.length && filteredOrders.length > 0) {
+            setSelectedOrders(new Set());
+        } else {
+            setSelectedOrders(new Set(filteredOrders.map(o => o.id)));
+        }
+    };
 
   const handleUpdateOrder = (orderId: string, field: keyof Order, value: any) => {
     setOrders(prevOrders =>
@@ -175,7 +200,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       price: newOrderData.price,
       product: newOrderData.product,
       noteClient: newOrderData.noteClient,
-      noteObligatoire: newOrderData.noteObligatoire,
 
       // Default values
       id: `manual-${Date.now()}`,
@@ -206,7 +230,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
             if (rows.length < 2) throw new Error("Le fichier CSV doit avoir un en-tête et au moins une ligne de données.");
 
             const header = rows[0].split(',').map(h => h.trim());
-            const expectedHeaders = ['customerName', 'customerPhone', 'address', 'price', 'product', 'noteClient', 'noteObligatoire'];
+            const expectedHeaders = ['customerName', 'customerPhone', 'address', 'price', 'product', 'noteClient'];
             const headerMap = expectedHeaders.map(h => header.indexOf(h));
 
             if (headerMap.some(index => index === -1)) {
@@ -229,7 +253,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     price: price,
                     product: values[headerMap[4]]?.trim() || '',
                     noteClient: values[headerMap[5]]?.trim() || '',
-                    noteObligatoire: values[headerMap[6]]?.trim() || '',
                     platform: Platform.Manual,
                     statut: Statut.PasDeReponse,
                     assignedUserId: null,
@@ -316,7 +339,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   
     const headers = [
       'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Produit', 'Prix',
-      'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Note Obligatoire', 'Ramassage', 'Livraison', 
+      'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Ramassage', 'Livraison', 
       'Remboursement', 'Commande retour', 'Appels'
     ];
   
@@ -342,7 +365,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         escapeCSV(order.statut),
         escapeCSV(assignedUser),
         escapeCSV(order.noteClient),
-        escapeCSV(order.noteObligatoire),
         escapeCSV(order.ramassage),
         escapeCSV(order.livraison),
         escapeCSV(order.remboursement),
@@ -557,6 +579,20 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
           <table className="w-full border-collapse text-xs">
             <thead className="font-bold text-gray-600 dark:text-gray-300 uppercase">
               <tr>
+                <th className={`p-2 border text-center ${headerStyles.info} w-10`}>
+                    <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                        checked={filteredOrders.length > 0 && selectedOrders.size === filteredOrders.length}
+                        onChange={handleSelectAll}
+                        ref={el => {
+                            if (el) {
+                                el.indeterminate = selectedOrders.size > 0 && selectedOrders.size < filteredOrders.length;
+                            }
+                        }}
+                        aria-label="Sélectionner toutes les commandes"
+                    />
+                </th>
                 <th className={`p-2 border ${headerStyles.info}`}>Date</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Client</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Téléphone</th>
@@ -567,7 +603,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.status}`}>Confirmation</th>
                 <th className={`p-2 border ${headerStyles.status}`}>User</th>
                 <th className={`p-2 border ${headerStyles.status}`}>NOTE DU CLIENT</th>
-                <th className={`p-2 border ${headerStyles.status}`}>NOTE OBLIGATOIRE</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Msg de Confirmation</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Ramassage</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Ramassage</th>
@@ -587,6 +622,15 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                       (order.statut === Statut.Confirme || order.statut === Statut.Rappel);
                   return (
                     <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
+                      <td className="p-1 border text-center align-middle">
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                            checked={selectedOrders.has(order.id)}
+                            onChange={() => handleSelectOrder(order.id)}
+                            aria-label={`Sélectionner la commande ${order.id}`}
+                        />
+                      </td>
                       <td className="p-1 border min-w-[100px]">{new Date(order.date).toLocaleDateString('fr-FR')}</td>
                       <td className="p-1 border min-w-[150px]">{renderInput(order, 'customerName', 'Nom...', !isEditable)}</td>
                       <td className="p-1 border min-w-[120px]">{renderInput(order, 'customerPhone', 'Téléphone...', !isEditable)}</td>
@@ -659,7 +703,6 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                         </select>
                       </td>
                       <td className="p-1 border min-w-[200px]">{renderInput(order, 'noteClient', 'Note...', false)}</td>
-                      <td className="p-1 border min-w-[200px] text-xs text-red-600 dark:text-red-400 font-semibold">{order.noteObligatoire}</td>
                       <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'statut')}</td>
                       <td className="p-1 border min-w-[150px]">
                         <ColorSelector

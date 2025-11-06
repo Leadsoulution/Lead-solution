@@ -171,12 +171,12 @@ const Clients: React.FC<ClientsProps> = ({ clients, setClients, orders }) => {
               className="w-full pl-10 pr-4 py-2 border rounded-md bg-transparent focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex-1 overflow-y-auto -mr-2 pr-2 space-y-2">
+          <div className="flex-1 overflow-y-auto -mr-2 pr-2 border-t border-b dark:border-gray-700 divide-y dark:divide-gray-700">
             {filteredClients.map(client => (
               <div
                 key={client.id}
                 onClick={() => setSelectedClient(client)}
-                className={`p-3 rounded-lg cursor-pointer border transition-all ${selectedClient?.id === client.id ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-400' : 'hover:bg-accent dark:hover:bg-dark-accent border-transparent'}`}
+                className={`p-3 cursor-pointer transition-colors ${selectedClient?.id === client.id ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-accent dark:hover:bg-dark-accent'}`}
               >
                 <div className="font-semibold">{client.name}</div>
                 <div className="text-sm text-muted-foreground">{client.phone}</div>
