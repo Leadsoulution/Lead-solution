@@ -1,3 +1,5 @@
+
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Order, Product, Livraison } from '../types';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -33,12 +35,14 @@ const CustomTooltip: React.FC<TooltipProps<ValueType, NameType>> = ({ active, pa
   return null;
 };
 
-// FIX: Define an interface for the costs state to ensure type safety.
+// Define an interface for the costs state to ensure type safety.
 interface FinancialCosts {
-  fixed: {
-    packaging: number;
-    wifi: number;
+  monthlyFixed: {
     rent: number;
+    wifi: number;
+  };
+  perUnit: {
+    packaging: number;
     transport: number;
   };
   variable: {
@@ -49,11 +53,23 @@ interface FinancialCosts {
   };
 }
 
+// FIX: Add interface for calculator data to ensure type safety.
+interface CalculatorData {
+  leads: number;
+  adSpend: number;
+  confRate: number;
+  delivRate: number;
+  sellingPrice: number;
+  productCost: number;
+  shippingFee: number;
+}
+
 const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   const { formatCurrency } = useCustomization();
   const [notification, setNotification] = useState<string | null>(null);
 
-  const [calculatorData, setCalculatorData] = useState({
+  // FIX: Apply the CalculatorData interface to the useState hook.
+  const [calculatorData, setCalculatorData] = useState<CalculatorData>({
     leads: 1000,
     adSpend: 20000,
     confRate: 60,
@@ -70,33 +86,54 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
     }
   }, [notification]);
   
-  // FIX: Apply the FinancialCosts interface to the useState hook to fix typing issues.
+  // Apply the FinancialCosts interface to the useState hook to fix typing issues.
+  // FIX: Replace the unsafe useState initializer with a type-safe version that correctly parses and coerces values from localStorage.
   const [costs, setCosts] = useState<FinancialCosts>(() => {
     try {
         const savedCosts = localStorage.getItem('financialCosts');
-        return savedCosts ? JSON.parse(savedCosts) : {
-        fixed: {
-            packaging: 5,
-            wifi: 1,
-            rent: 3,
-            transport: 4,
-        },
-        variable: {
-            facebookAdsPercent: 15,
-            tiktokAdsPercent: 10,
-            confirmation: 15,
-            delivery: 35,
-        },
+        const parsed = savedCosts ? JSON.parse(savedCosts) : {};
+
+        const defaults: FinancialCosts = {
+            monthlyFixed: { rent: 3, wifi: 1 },
+            perUnit: { packaging: 5, transport: 4 },
+            variable: { facebookAdsPercent: 15, tiktokAdsPercent: 10, confirmation: 15, delivery: 35 },
         };
+
+        // Migration for old data structure
+        if (parsed.fixed) {
+            parsed.monthlyFixed = { rent: parsed.fixed.rent, wifi: parsed.fixed.wifi };
+            parsed.perUnit = { packaging: parsed.fixed.packaging, transport: parsed.fixed.transport };
+            delete parsed.fixed;
+        }
+
+        // Deep merge with type safety by coercing to Number
+        const result: FinancialCosts = {
+            monthlyFixed: {
+                rent: Number(parsed.monthlyFixed?.rent ?? defaults.monthlyFixed.rent),
+                wifi: Number(parsed.monthlyFixed?.wifi ?? defaults.monthlyFixed.wifi),
+            },
+            perUnit: {
+                packaging: Number(parsed.perUnit?.packaging ?? defaults.perUnit.packaging),
+                transport: Number(parsed.perUnit?.transport ?? defaults.perUnit.transport),
+            },
+            variable: {
+                facebookAdsPercent: Number(parsed.variable?.facebookAdsPercent ?? defaults.variable.facebookAdsPercent),
+                tiktokAdsPercent: Number(parsed.variable?.tiktokAdsPercent ?? defaults.variable.tiktokAdsPercent),
+                confirmation: Number(parsed.variable?.confirmation ?? defaults.variable.confirmation),
+                delivery: Number(parsed.variable?.delivery ?? defaults.variable.delivery),
+            },
+        };
+        return result;
     } catch (e) {
         return {
-            fixed: { packaging: 5, wifi: 1, rent: 3, transport: 4 },
+            monthlyFixed: { rent: 3, wifi: 1 },
+            perUnit: { packaging: 5, transport: 4 },
             variable: { facebookAdsPercent: 15, tiktokAdsPercent: 10, confirmation: 15, delivery: 35 },
-        }
+        };
     }
   });
 
-  const handleCostChange = (type: 'fixed' | 'variable', name: string, value: string) => {
+  const handleCostChange = (type: 'monthlyFixed' | 'perUnit' | 'variable', name: string, value: string) => {
     setCosts(prev => ({
         ...prev,
         [type]: {
@@ -110,17 +147,15 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
     const { name, value } = e.target;
     setCalculatorData(prev => ({
         ...prev,
-        [name]: parseFloat(value) || 0,
+        [name]: parseFloat(value.replace(',', '.')) || 0,
     }));
   };
   
  const handleCalculatedFieldChange = (name: string, value: string) => {
-    const numericValue = parseFloat(value) || 0;
+    const numericValue = parseFloat(value.replace(',', '.')) || 0;
 
     setCalculatorData(prev => {
         const newData = { ...prev };
-        let ordersConfirmed: number;
-        let ordersDelivered: number;
 
         switch (name) {
             case 'cpl':
@@ -129,46 +164,6 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
             case 'ordersConfirmed':
                 if (prev.leads > 0) {
                     newData.confRate = (numericValue / prev.leads) * 100;
-                }
-                break;
-            case 'ordersDelivered':
-                ordersConfirmed = prev.leads * (prev.confRate / 100);
-                if (ordersConfirmed > 0) {
-                    newData.delivRate = (numericValue / ordersConfirmed) * 100;
-                }
-                break;
-            case 'cpd':
-                ordersConfirmed = prev.leads * (prev.confRate / 100);
-                ordersDelivered = ordersConfirmed * (prev.delivRate / 100);
-                newData.adSpend = numericValue * ordersDelivered;
-                break;
-            case 'profitPerUnit':
-                ordersConfirmed = prev.leads * (prev.confRate / 100);
-                ordersDelivered = ordersConfirmed * (prev.delivRate / 100);
-                if (ordersDelivered > 0) {
-                    const cpd = prev.adSpend / ordersDelivered;
-                    newData.sellingPrice = numericValue + prev.productCost + prev.shippingFee + cpd;
-                }
-                break;
-            case 'totalProfit':
-                ordersConfirmed = prev.leads * (prev.confRate / 100);
-                ordersDelivered = ordersConfirmed * (prev.delivRate / 100);
-                if (ordersDelivered > 0) {
-                    const newProfitPerUnit = numericValue / ordersDelivered;
-                    const cpd = prev.adSpend / ordersDelivered;
-                    newData.sellingPrice = newProfitPerUnit + prev.productCost + prev.shippingFee + cpd;
-                }
-                break;
-            case 'roi':
-                ordersConfirmed = prev.leads * (prev.confRate / 100);
-                ordersDelivered = ordersConfirmed * (prev.delivRate / 100);
-                if (ordersDelivered > 0) {
-                    const totalCogs = prev.productCost * ordersDelivered;
-                    const investment = prev.adSpend + totalCogs;
-                    const newTotalProfit = (numericValue / 100) * investment;
-                    const newProfitPerUnit = newTotalProfit / ordersDelivered;
-                    const cpd = prev.adSpend / ordersDelivered;
-                    newData.sellingPrice = newProfitPerUnit + prev.productCost + prev.shippingFee + cpd;
                 }
                 break;
         }
@@ -211,7 +206,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   };
 
   const financialAnalysis = useMemo(() => {
-    const totalFixedCost = Object.values(costs.fixed).reduce((sum, cost) => sum + cost, 0);
+    const totalPerUnitCost = Object.values(costs.perUnit).reduce((sum, cost) => sum + cost, 0);
 
     return products.map(product => {
       const { sellingPrice, purchasePrice } = product;
@@ -220,8 +215,8 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
       const tiktokAdsCost = sellingPrice * (costs.variable.tiktokAdsPercent / 100);
       const totalVariableCostForUnit = facebookAdsCost + tiktokAdsCost + costs.variable.confirmation + costs.variable.delivery;
 
-      const totalCostPerUnit = purchasePrice + totalFixedCost + totalVariableCostForUnit;
-      const netProfitPerUnit = sellingPrice - totalCostPerUnit;
+      const costPerUnitSold = purchasePrice + totalPerUnitCost + totalVariableCostForUnit;
+      const netProfitPerUnit = sellingPrice - costPerUnitSold;
       const marginPercent = sellingPrice > 0 ? (netProfitPerUnit / sellingPrice) * 100 : 0;
       
       const quantitySold = orders.filter(o => o.product === product.name && o.livraison === Livraison.Livre).length;
@@ -230,29 +225,31 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
         ...product,
         quantity_sold: quantitySold,
         costs: {
-          fixed_cost: totalFixedCost,
+          per_unit_cost: totalPerUnitCost,
           variable_cost: totalVariableCostForUnit,
-          total_cost: totalCostPerUnit,
-          net_profit: netProfitPerUnit,
+          total_cost_per_unit_sold: costPerUnitSold,
+          net_profit_per_unit: netProfitPerUnit,
           margin_percent: marginPercent,
         },
         total_revenue: quantitySold * sellingPrice,
-        total_profit: quantitySold * netProfitPerUnit,
-        total_expenses: quantitySold * totalCostPerUnit,
+        total_product_line_expenses: quantitySold * costPerUnitSold,
+        total_product_line_profit: quantitySold * netProfitPerUnit,
       };
     }).filter(p => p !== null);
   }, [orders, products, costs]);
 
   const overviewStats = useMemo(() => {
+    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
     const totalRevenue = financialAnalysis.reduce((sum, p) => sum + (p?.total_revenue || 0), 0);
-    const totalExpenses = financialAnalysis.reduce((sum, p) => sum + (p?.total_expenses || 0), 0);
+    const totalProductLinesExpenses = financialAnalysis.reduce((sum, p) => sum + (p?.total_product_line_expenses || 0), 0);
+    const totalExpenses = totalProductLinesExpenses + totalMonthlyFixedCosts;
     const totalProfit = totalRevenue - totalExpenses;
     return { totalRevenue, totalExpenses, totalProfit };
-  }, [financialAnalysis]);
+  }, [financialAnalysis, costs.monthlyFixed]);
 
   const monthlyProfitData = useMemo(() => {
     const profitMap = new Map<string, number>();
-    financialAnalysis.forEach(p => p && profitMap.set(p.name, p.costs.net_profit));
+    financialAnalysis.forEach(p => p && profitMap.set(p.name, p.costs.net_profit_per_unit));
     
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     const data = months.map(month => ({ name: month, profit: 0 }));
@@ -266,21 +263,39 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
             }
         }
     });
-    return data;
-  }, [orders, financialAnalysis]);
 
-  const totalFixedCosts = Object.values(costs.fixed).reduce((s, c) => s + c, 0);
+    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
+    const currentMonth = new Date().getMonth();
+    
+    return data.map((monthData, index) => {
+        // Only apply costs for past and current months of the current year for this chart
+        if (index <= currentMonth) {
+            return { ...monthData, profit: monthData.profit - totalMonthlyFixedCosts };
+        }
+        return monthData;
+    });
+
+  }, [orders, financialAnalysis, costs.monthlyFixed]);
+
+  const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((s, c) => s + c, 0);
+  const totalPerUnitCosts = Object.values(costs.perUnit).reduce((s, c) => s + c, 0);
   const inputClass = "w-28 text-right py-1 rounded-md border bg-secondary dark:bg-dark-secondary focus:ring-1 focus:ring-blue-500 ml-auto block";
+  
+  const formatNumberForCalc = (num: number, decimalPlaces = 2) => {
+    if (num % 1 === 0) {
+      return String(num);
+    }
+    return num.toFixed(decimalPlaces).replace('.', ',');
+  };
 
-  const CalcInputCell: React.FC<{ name: keyof typeof calculatorData; value: number; }> = ({ name, value }) => (
+  const CalcInputCell: React.FC<{ name: keyof CalculatorData; value: number; }> = ({ name, value }) => (
     <td className="p-0 border border-gray-500 dark:border-gray-600">
         <input
-            type="number"
+            type="text"
             name={name}
-            value={value}
+            value={formatNumberForCalc(value)}
             onChange={handleCalculatorChange}
             className="w-full h-full p-2 bg-transparent text-center font-bold outline-none"
-            step="any"
         />
     </td>
 );
@@ -315,28 +330,28 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
                         <CalcInputCell name="leads" value={calculatorData.leads} />
                         <CalcInputCell name="adSpend" value={calculatorData.adSpend} />
                         <td className="p-0 border border-gray-500 dark:border-gray-600">
-                           <input type="number" value={calculatorResults.cpl.toFixed(2)} onChange={(e) => handleCalculatedFieldChange('cpl', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" step="any" />
+                           <input type="text" value={formatNumberForCalc(calculatorResults.cpl)} onChange={(e) => handleCalculatedFieldChange('cpl', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" />
                         </td>
                         <td className="p-0 border border-gray-500 dark:border-gray-600">
                             <div className="relative h-full">
-                                <input type="number" name="confRate" value={calculatorData.confRate} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none"/>
+                                <input type="text" name="confRate" value={formatNumberForCalc(calculatorData.confRate)} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none"/>
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
                             </div>
                         </td>
                          <td className="p-0 border border-gray-500 dark:border-gray-600">
-                           <input type="number" value={calculatorResults.ordersConfirmed.toFixed(2)} onChange={(e) => handleCalculatedFieldChange('ordersConfirmed', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" step="any" />
+                           <input type="text" value={formatNumberForCalc(calculatorResults.ordersConfirmed, 0)} onChange={(e) => handleCalculatedFieldChange('ordersConfirmed', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" />
                         </td>
                         <td className="p-0 border border-gray-500 dark:border-gray-600">
                             <div className="relative h-full">
-                                <input type="number" name="delivRate" value={calculatorData.delivRate} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none"/>
+                                <input type="text" name="delivRate" value={formatNumberForCalc(calculatorData.delivRate)} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none"/>
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
                             </div>
                         </td>
-                        <td className="p-0 border border-gray-500 dark:border-gray-600">
-                           <input type="number" value={calculatorResults.ordersDelivered.toFixed(2)} onChange={(e) => handleCalculatedFieldChange('ordersDelivered', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" step="any" />
+                        <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold">
+                           {formatNumberForCalc(calculatorResults.ordersDelivered, 0)}
                         </td>
-                        <td className="p-0 border border-gray-500 dark:border-gray-600">
-                           <input type="number" value={calculatorResults.cpd.toFixed(2)} onChange={(e) => handleCalculatedFieldChange('cpd', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none text-red-600 dark:text-red-400" step="any" />
+                        <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold text-red-600 dark:text-red-400">
+                           {formatNumberForCalc(calculatorResults.cpd)}
                         </td>
                     </tr>
                 </tbody>
@@ -359,17 +374,15 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
                         <CalcInputCell name="sellingPrice" value={calculatorData.sellingPrice} />
                         <CalcInputCell name="productCost" value={calculatorData.productCost} />
                         <CalcInputCell name="shippingFee" value={calculatorData.shippingFee} />
-                        <td className="p-0 border border-gray-500 dark:border-gray-600">
-                            <input type="number" value={calculatorResults.profitPerUnit.toFixed(2)} onChange={(e) => handleCalculatedFieldChange('profitPerUnit', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none text-green-900 dark:text-green-200" step="any"/>
+                        <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold text-green-900 dark:text-green-200">
+                            {formatNumberForCalc(calculatorResults.profitPerUnit)}
                         </td>
-                        <td className="p-0 border border-gray-500 dark:border-gray-600">
-                             <input type="number" value={calculatorResults.totalProfit.toFixed(0)} onChange={(e) => handleCalculatedFieldChange('totalProfit', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" step="any"/>
+                        <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold">
+                             {formatNumberForCalc(calculatorResults.totalProfit, 0)}
                         </td>
-                        <td className="p-0 border border-gray-500 dark:border-gray-600">
-                            <div className="relative h-full">
-                                <input type="number" value={calculatorResults.roi.toFixed(2)} onChange={(e) => handleCalculatedFieldChange('roi', e.target.value)} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none" step="any"/>
-                                <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
-                            </div>
+                        <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold relative">
+                            <span>{formatNumberForCalc(calculatorResults.roi)}</span>
+                            <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
                         </td>
                     </tr>
                 </tbody>
@@ -386,43 +399,51 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
 
       <div className="space-y-4">
         <h2 className="text-2xl font-semibold border-b pb-2 dark:border-gray-700">Méthode de Calcul des Frais</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
-                <h3 className="text-lg font-semibold mb-4">Frais Fixes (par unité)</h3>
-                <table className="w-full text-sm">
-                    <thead className="text-left">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-1 p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
+                <h3 className="text-lg font-semibold mb-4">Frais Opérationnels</h3>
+                
+                <p className="text-sm font-medium text-muted-foreground">Frais Fixes Mensuels</p>
+                <table className="w-full text-sm mt-2">
+                    <tbody className="divide-y dark:divide-gray-700">
                         <tr>
-                            <th className="py-2 font-medium text-muted-foreground">Frais</th>
-                            <th className="py-2 font-medium text-muted-foreground text-right">Montant ({formatCurrency(0).replace(/[\d,.]/g, '')})</th>
+                            <td className="py-2">Loyer</td>
+                            <td className="py-2"><input type="number" value={costs.monthlyFixed.rent} onChange={(e) => handleCostChange('monthlyFixed', 'rent', e.target.value)} className={inputClass} step="0.01"/></td>
                         </tr>
-                    </thead>
+                         <tr>
+                            <td className="py-2">Wifi</td>
+                            <td className="py-2"><input type="number" value={costs.monthlyFixed.wifi} onChange={(e) => handleCostChange('monthlyFixed', 'wifi', e.target.value)} className={inputClass} step="0.01"/></td>
+                        </tr>
+                    </tbody>
+                     <tfoot className="font-bold border-t-2 dark:border-gray-600">
+                        <tr>
+                            <td className="pt-3">Total Mensuel</td>
+                            <td className="pt-3 text-right">{formatCurrency(totalMonthlyFixedCosts)}</td>
+                        </tr>
+                    </tfoot>
+                </table>
+
+                <p className="text-sm font-medium text-muted-foreground mt-6">Frais par Unité</p>
+                 <table className="w-full text-sm mt-2">
                     <tbody className="divide-y dark:divide-gray-700">
                         <tr>
                             <td className="py-2">Packaging</td>
-                            <td className="py-2"><input type="number" value={costs.fixed.packaging} onChange={(e) => handleCostChange('fixed', 'packaging', e.target.value)} className={inputClass} step="0.01"/></td>
+                            <td className="py-2"><input type="number" value={costs.perUnit.packaging} onChange={(e) => handleCostChange('perUnit', 'packaging', e.target.value)} className={inputClass} step="0.01"/></td>
                         </tr>
                         <tr>
-                            <td className="py-2">Wifi</td>
-                            <td className="py-2"><input type="number" value={costs.fixed.wifi} onChange={(e) => handleCostChange('fixed', 'wifi', e.target.value)} className={inputClass} step="0.01"/></td>
-                        </tr>
-                        <tr>
-                            <td className="py-2">Loyer</td>
-                            <td className="py-2"><input type="number" value={costs.fixed.rent} onChange={(e) => handleCostChange('fixed', 'rent', e.target.value)} className={inputClass} step="0.01"/></td>
-                        </tr>
-                         <tr>
                             <td className="py-2">Transport</td>
-                            <td className="py-2"><input type="number" value={costs.fixed.transport} onChange={(e) => handleCostChange('fixed', 'transport', e.target.value)} className={inputClass} step="0.01"/></td>
+                            <td className="py-2"><input type="number" value={costs.perUnit.transport} onChange={(e) => handleCostChange('perUnit', 'transport', e.target.value)} className={inputClass} step="0.01"/></td>
                         </tr>
                     </tbody>
                     <tfoot className="font-bold border-t-2 dark:border-gray-600">
                         <tr>
-                            <td className="pt-3">Total des Frais Fixes</td>
-                            <td className="pt-3 text-right">{formatCurrency(totalFixedCosts)}</td>
+                            <td className="pt-3">Total par Unité</td>
+                            <td className="pt-3 text-right">{formatCurrency(totalPerUnitCosts)}</td>
                         </tr>
                     </tfoot>
                 </table>
             </div>
-             <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
+             <div className="lg:col-span-2 p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
                 <h3 className="text-lg font-semibold mb-4">Frais Variables</h3>
                  <table className="w-full text-sm">
                     <thead className="text-left">
@@ -495,13 +516,13 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
                 <th className="px-4 py-3">Produit</th>
                 <th className="px-4 py-3 text-right">Prix Vente</th>
                 <th className="px-4 py-3 text-right">Prix d'Achat</th>
+                <th className="px-4 py-3 text-right">Charges par Unité</th>
                 <th className="px-4 py-3 text-right">Charges Variables</th>
-                <th className="px-4 py-3 text-right">Charges Fixes</th>
-                <th className="px-4 py-3 text-right">Coût Total/Unité</th>
-                <th className="px-4 py-3 text-right">Bénéfice Net/Unité</th>
+                <th className="px-4 py-3 text-right">Coût / Unité Vendue</th>
+                <th className="px-4 py-3 text-right">Bénéfice / Unité</th>
                 <th className="px-4 py-3 text-right">Marge Bénéficiaire</th>
                 <th className="px-4 py-3 text-right">Qté Vendue</th>
-                <th className="px-4 py-3 text-right">Bénéfice Total</th>
+                <th className="px-4 py-3 text-right">Bénéfice Produit Total</th>
               </tr>
             </thead>
             <tbody className="divide-y dark:divide-gray-700">
@@ -516,15 +537,15 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
                   </td>
                   <td className="px-4 py-3 text-right">{formatCurrency(p.sellingPrice)}</td>
                   <td className="px-4 py-3 text-right">{formatCurrency(p.purchasePrice)}</td>
+                  <td className="px-4 py-3 text-right text-orange-500">{formatCurrency(p.costs.per_unit_cost)}</td>
                   <td className="px-4 py-3 text-right text-orange-500">{formatCurrency(p.costs.variable_cost)}</td>
-                  <td className="px-4 py-3 text-right text-orange-500">{formatCurrency(p.costs.fixed_cost)}</td>
-                  <td className="px-4 py-3 text-right text-red-500">{formatCurrency(p.costs.total_cost)}</td>
-                  <td className="px-4 py-3 text-right text-green-600 font-semibold">{formatCurrency(p.costs.net_profit)}</td>
+                  <td className="px-4 py-3 text-right text-red-500">{formatCurrency(p.costs.total_cost_per_unit_sold)}</td>
+                  <td className="px-4 py-3 text-right text-green-600 font-semibold">{formatCurrency(p.costs.net_profit_per_unit)}</td>
                   <td className={`px-4 py-3 text-right font-medium ${p.costs.margin_percent > 20 ? 'text-green-500' : 'text-orange-500'}`}>
                     {p.costs.margin_percent.toFixed(1)}%
                   </td>
                    <td className="px-4 py-3 text-right">{p.quantity_sold}</td>
-                  <td className="px-4 py-3 text-right font-bold text-blue-600">{formatCurrency(p.total_profit)}</td>
+                  <td className="px-4 py-3 text-right font-bold text-blue-600">{formatCurrency(p.total_product_line_profit)}</td>
                 </tr>
               ))}
             </tbody>

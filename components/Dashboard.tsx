@@ -76,21 +76,117 @@ interface DashboardProps {
   orders: Order[];
 }
 
+type PresetKey = 'today' | 'yesterday' | 'currentWeek' | 'previousWeek' | 'currentMonth' | 'previousMonth' | 'last12Months' | 'currentYear';
+
 const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
   const { formatCurrency } = useCustomization();
   const [shipmentTimeFilter, setShipmentTimeFilter] = useState<'Week' | 'Month' | 'Year'>('Year');
   const [salesTimeFilter, setSalesTimeFilter] = useState<'Week' | 'Month' | 'Year'>('Year');
   const [shipmentStatusFilter, setShipmentStatusFilter] = useState<'All' | 'On Delivery' | 'Delivered' | 'Returned'>('All');
   const [salesProductFilter, setSalesProductFilter] = useState<string>('All');
+  const [activePreset, setActivePreset] = useState<PresetKey | null>(null);
   
   const [dateRange, setDateRange] = useState(() => {
-    const startOfYear = new Date(new Date().getFullYear(), 0, 1);
-    const today = new Date();
+    if (orders.length === 0) {
+        const today = new Date();
+        const startOfYear = new Date(today.getFullYear(), 0, 1);
+        return {
+            start: startOfYear.toISOString().split('T')[0],
+            end: today.toISOString().split('T')[0],
+        };
+    }
+
+    const dates = orders.map(o => new Date(o.date).getTime());
+    const validDates = dates.filter(t => !isNaN(t));
+
+    if (validDates.length === 0) {
+        const today = new Date();
+        const startOfYear = new Date(today.getFullYear(), 0, 1);
+        return {
+            start: startOfYear.toISOString().split('T')[0],
+            end: today.toISOString().split('T')[0],
+        };
+    }
+
+    const minDate = new Date(Math.min(...validDates));
+    const maxDate = new Date(Math.max(...validDates));
+    
     return {
-        start: startOfYear.toISOString().split('T')[0],
-        end: today.toISOString().split('T')[0],
+        start: minDate.toISOString().split('T')[0],
+        end: maxDate.toISOString().split('T')[0],
     };
   });
+
+  const formatDate = (date: Date) => date.toISOString().split('T')[0];
+
+  const handleDatePreset = (preset: PresetKey) => {
+    const today = new Date();
+    let start: Date, end: Date;
+    end = new Date(today); // Default end date is today for many presets
+
+    switch (preset) {
+        case 'today':
+            start = new Date(today);
+            end = new Date(today);
+            break;
+        case 'yesterday':
+            start = new Date(today);
+            start.setDate(today.getDate() - 1);
+            end = new Date(start);
+            break;
+        case 'currentWeek':
+            start = new Date(today);
+            const day = start.getDay();
+            // Sunday - Saturday : 0 - 6
+            // We want Monday to be the start of the week.
+            const diff = start.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+            start.setDate(diff);
+            break;
+        case 'previousWeek':
+            // End of last week is last Sunday
+            end = new Date(today);
+            // Go back to previous day until it's Sunday
+            end.setDate(today.getDate() - (today.getDay() === 0 ? 7 : today.getDay()));
+            
+            // Start of last week is Monday
+            start = new Date(end);
+            start.setDate(end.getDate() - 6);
+            break;
+        case 'currentMonth':
+            start = new Date(today.getFullYear(), today.getMonth(), 1);
+            break;
+        case 'previousMonth':
+            start = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+            end = new Date(today.getFullYear(), today.getMonth(), 0); // Day 0 of current month is last day of previous month.
+            break;
+        case 'last12Months':
+            start = new Date(today);
+            start.setFullYear(today.getFullYear() - 1);
+            break;
+        case 'currentYear':
+            start = new Date(today.getFullYear(), 0, 1);
+            break;
+    }
+    
+    setDateRange({ start: formatDate(start), end: formatDate(end) });
+    setActivePreset(preset);
+  };
+  
+  const handleDateInputChange = (part: 'start' | 'end', value: string) => {
+    setDateRange(prev => ({ ...prev, [part]: value }));
+    setActivePreset(null);
+  };
+
+  const presets = [
+    { key: 'today', label: "Aujourd'hui" },
+    { key: 'yesterday', label: 'Hier' },
+    { key: 'currentWeek', label: 'Semaine courante' },
+    { key: 'previousWeek', label: 'Semaine précédente' },
+    { key: 'currentMonth', label: 'Mois courant' },
+    { key: 'previousMonth', label: 'Mois précédent' },
+    { key: 'last12Months', label: '12 derniers mois' },
+    { key: 'currentYear', label: 'Année courante' }
+  ];
 
   const filteredOrders = useMemo(() => {
     const start = new Date(dateRange.start + 'T00:00:00');
@@ -156,8 +252,9 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
   }, [confirmedOrders, salesTimeFilter, salesProductFilter]);
 
   const categoryData = useMemo(() => {
-    // FIX: Explicitly typing the accumulator `acc` ensures that `salesByProduct` is correctly inferred as `Record<string, number>`, preventing downstream type errors.
-    const salesByProduct = confirmedOrders.reduce((acc: Record<string, number>, order) => {
+    // FIX: Explicitly typing the accumulator of reduce ensures that salesByProduct is correctly inferred as Record<string, number>.
+    // FIX: Add generic type to reduce to ensure correct type inference for the accumulator.
+    const salesByProduct = confirmedOrders.reduce<Record<string, number>>((acc, order) => {
       if (!acc[order.product]) {
         acc[order.product] = 0;
       }
@@ -236,23 +333,36 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     <div className="space-y-6">
       <div className="flex flex-wrap justify-between items-center gap-4">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <div className="flex items-center gap-2 px-4 py-2 border rounded-lg bg-card dark:bg-dark-card text-sm">
-            <Calendar size={16} className="text-muted-foreground" />
-            <input 
-                type="date" 
-                value={dateRange.start} 
-                onChange={e => setDateRange(prev => ({ ...prev, start: e.target.value }))}
-                className="bg-transparent focus:outline-none text-secondary-foreground dark:text-dark-secondary-foreground"
-                aria-label="Start date"
-            />
-            <span className="text-muted-foreground">to</span>
-            <input 
-                type="date" 
-                value={dateRange.end} 
-                onChange={e => setDateRange(prev => ({ ...prev, end: e.target.value }))}
-                className="bg-transparent focus:outline-none text-secondary-foreground dark:text-dark-secondary-foreground"
-                aria-label="End date"
-            />
+        <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex items-center flex-wrap gap-1 text-sm bg-secondary dark:bg-dark-secondary p-1 rounded-lg">
+              {presets.map(p => (
+                  <button
+                      key={p.key}
+                      onClick={() => handleDatePreset(p.key as PresetKey)}
+                      className={`px-3 py-1 rounded-md transition-colors ${activePreset === p.key ? 'bg-blue-600 text-white' : 'hover:bg-card dark:hover:bg-dark-card'}`}
+                  >
+                      {p.label}
+                  </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 border rounded-lg bg-card dark:bg-dark-card text-sm">
+                <Calendar size={16} className="text-muted-foreground" />
+                <input 
+                    type="date" 
+                    value={dateRange.start} 
+                    onChange={e => handleDateInputChange('start', e.target.value)}
+                    className="bg-transparent focus:outline-none text-secondary-foreground dark:text-dark-secondary-foreground"
+                    aria-label="Start date"
+                />
+                <span className="text-muted-foreground">to</span>
+                <input 
+                    type="date" 
+                    value={dateRange.end} 
+                    onChange={e => handleDateInputChange('end', e.target.value)}
+                    className="bg-transparent focus:outline-none text-secondary-foreground dark:text-dark-secondary-foreground"
+                    aria-label="End date"
+                />
+            </div>
         </div>
       </div>
       
