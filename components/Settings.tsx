@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+
+
+import React, { useState, useRef, useEffect } from 'react';
 import { Power, PowerOff, CheckCircle, XCircle, Save, RefreshCw, ChevronDown } from 'lucide-react';
 import { Statut, Ramassage, Livraison, Remboursement, CommandeRetour, ColorCategory, MessageCategory, AllMessageTemplates } from '../types';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -58,6 +60,24 @@ const MessageSettingsSection: React.FC<{
 }> = ({ title, category, options }) => {
   const [isOpen, setIsOpen] = useState(false);
   const { messageTemplates, setMessageTemplates } = useCustomization();
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const cursorPositionRef = useRef<{ position: number; status: string } | null>(null);
+
+  useEffect(() => {
+    if (cursorPositionRef.current) {
+      const { position, status } = cursorPositionRef.current;
+      const textarea = textareaRefs.current[status];
+      if (textarea) {
+        textarea.focus();
+        textarea.selectionStart = position;
+        textarea.selectionEnd = position;
+      }
+      cursorPositionRef.current = null;
+    }
+  });
+
+  const availableVariables = ['{{client}}', '{{id}}', '{{produit}}', '{{prix}}', '{{status}}', '{{téléphone}}', '{{adresse}}'];
+  const availableEmojis = ['✅', '👋', '📦', '🚚', '💰', '👍', '😊'];
 
   const handleTemplateChange = (status: string, value: string) => {
     setMessageTemplates(prev => {
@@ -90,6 +110,19 @@ const MessageSettingsSection: React.FC<{
     });
   };
 
+  const handleInsertText = (textToInsert: string, status: string) => {
+    const textarea = textareaRefs.current[status];
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = textarea.value;
+    const newText = text.substring(0, start) + textToInsert + text.substring(end);
+
+    cursorPositionRef.current = { position: start + textToInsert.length, status };
+    handleTemplateChange(status, newText);
+  };
+
   return (
      <div className="border-b dark:border-gray-700 last:border-b-0 py-2">
         <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center py-2 font-semibold text-lg hover:bg-accent dark:hover:bg-dark-accent/50 rounded-md px-2">
@@ -108,7 +141,7 @@ const MessageSettingsSection: React.FC<{
                     return (
                         <div key={status}>
                             <div className="flex items-center justify-between mb-2">
-                                <label className="text-sm font-medium text-muted-foreground flex items-center gap-2">{status}</label>
+                                <label className="block text-sm font-medium text-muted-foreground flex items-center gap-2">{status}</label>
                                 <button
                                     onClick={() => handleToggleEnabled(status)}
                                     title={isEnabled ? 'Désactiver' : 'Activer'}
@@ -117,10 +150,37 @@ const MessageSettingsSection: React.FC<{
                                     {isEnabled ? <Power size={18} /> : <PowerOff size={18} />}
                                 </button>
                             </div>
+                             <div className="flex flex-wrap gap-2 mb-2 items-center">
+                              {availableVariables.map(variable => (
+                                <button
+                                  key={variable}
+                                  type="button"
+                                  onClick={() => handleInsertText(variable, status)}
+                                  disabled={!isEnabled}
+                                  className="px-2 py-0.5 bg-blue-100 text-blue-800 dark:bg-blue-900/50 dark:text-blue-300 text-xs font-mono rounded-full hover:bg-blue-200 dark:hover:bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-100"
+                                >
+                                  {variable}
+                                </button>
+                              ))}
+                               <div className="h-4 w-px bg-gray-300 dark:bg-gray-600 mx-1"></div>
+                               {availableEmojis.map(emoji => (
+                                 <button
+                                  key={emoji}
+                                  type="button"
+                                  onClick={() => handleInsertText(emoji, status)}
+                                  disabled={!isEnabled}
+                                  className="px-2 py-1 bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200 text-sm rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                                  aria-label={`Insert ${emoji} emoji`}
+                                >
+                                  {emoji}
+                                </button>
+                              ))}
+                            </div>
                             <textarea
+                                ref={el => textareaRefs.current[status] = el}
                                 value={messageConfig.template}
                                 onChange={(e) => handleTemplateChange(status, e.target.value)}
-                                rows={2}
+                                rows={4}
                                 disabled={!isEnabled}
                                 className="w-full p-2 border rounded-md bg-transparent focus:ring-2 focus:ring-blue-500 text-sm disabled:opacity-50 disabled:bg-muted/50 dark:disabled:bg-dark-muted/50 transition-opacity"
                             />

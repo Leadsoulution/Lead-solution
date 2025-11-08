@@ -1,5 +1,11 @@
 
 
+
+
+
+
+
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Order, Product, Livraison } from '../types';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -53,7 +59,7 @@ interface FinancialCosts {
   };
 }
 
-// FIX: Add interface for calculator data to ensure type safety.
+// Add interface for calculator data to ensure type safety.
 interface CalculatorData {
   leads: number;
   adSpend: number;
@@ -68,7 +74,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   const { formatCurrency } = useCustomization();
   const [notification, setNotification] = useState<string | null>(null);
 
-  // FIX: Apply the CalculatorData interface to the useState hook.
+  // Apply the CalculatorData interface to the useState hook.
   const [calculatorData, setCalculatorData] = useState<CalculatorData>({
     leads: 1000,
     adSpend: 20000,
@@ -87,7 +93,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   }, [notification]);
   
   // Apply the FinancialCosts interface to the useState hook to fix typing issues.
-  // FIX: Replace the unsafe useState initializer with a type-safe version that correctly parses and coerces values from localStorage.
+  // Replace the unsafe useState initializer with a type-safe version that correctly parses and coerces values from localStorage.
   const [costs, setCosts] = useState<FinancialCosts>(() => {
     try {
         const savedCosts = localStorage.getItem('financialCosts');
@@ -206,7 +212,8 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   };
 
   const financialAnalysis = useMemo(() => {
-    const totalPerUnitCost = Object.values(costs.perUnit).reduce((sum, cost) => sum + cost, 0);
+    // Add Number() casting to ensure values are numeric for the reduce operation.
+    const totalPerUnitCost = Object.values(costs.perUnit).reduce((sum, cost) => sum + Number(cost), 0);
 
     return products.map(product => {
       const { sellingPrice, purchasePrice } = product;
@@ -239,7 +246,8 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   }, [orders, products, costs]);
 
   const overviewStats = useMemo(() => {
-    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
+    // Add Number() casting to ensure values are numeric for the reduce operation.
+    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + Number(cost), 0);
     const totalRevenue = financialAnalysis.reduce((sum, p) => sum + (p?.total_revenue || 0), 0);
     const totalProductLinesExpenses = financialAnalysis.reduce((sum, p) => sum + (p?.total_product_line_expenses || 0), 0);
     const totalExpenses = totalProductLinesExpenses + totalMonthlyFixedCosts;
@@ -264,7 +272,8 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
         }
     });
 
-    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
+    // Add Number() casting to ensure values are numeric for the reduce operation.
+    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + Number(cost), 0);
     const currentMonth = new Date().getMonth();
     
     return data.map((monthData, index) => {
@@ -277,8 +286,10 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
 
   }, [orders, financialAnalysis, costs.monthlyFixed]);
 
-  const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((s, c) => s + c, 0);
-  const totalPerUnitCosts = Object.values(costs.perUnit).reduce((s, c) => s + c, 0);
+  // Add Number() casting to ensure values are numeric for the reduce operation.
+  const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((s, c) => s + Number(c), 0);
+  // Add Number() casting to ensure values are numeric for the reduce operation.
+  const totalPerUnitCosts = Object.values(costs.perUnit).reduce((s, c) => s + Number(c), 0);
   const inputClass = "w-28 text-right py-1 rounded-md border bg-secondary dark:bg-dark-secondary focus:ring-1 focus:ring-blue-500 ml-auto block";
   
   const formatNumberForCalc = (num: number, decimalPlaces = 2) => {

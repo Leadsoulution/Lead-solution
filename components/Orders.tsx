@@ -8,6 +8,7 @@ import { useCustomization } from '../contexts/CustomizationContext';
 import AddOrderModal from './AddOrderModal';
 import FilterColorSelector from './FilterColorSelector';
 import AddProductModal from './AddProductModal';
+import WhatsAppPreviewModal from './WhatsAppPreviewModal';
 
 
 interface OrdersProps {
@@ -28,6 +29,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   const [showFilters, setShowFilters] = useState(false);
   const [selectedProductFilter, setSelectedProductFilter] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
+  const [whatsappPreviewData, setWhatsappPreviewData] = useState<{ phone: string; message: string; rawPhone: string; } | null>(null);
 
   useEffect(() => {
     if (notification) {
@@ -176,19 +178,33 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                      .replace(/{{id}}/g, order.id)
                      .replace(/{{produit}}/g, order.product)
                      .replace(/{{prix}}/g, formatCurrency(order.price))
-                     .replace(/{{status}}/g, status);
+                     .replace(/{{status}}/g, status)
+                     .replace(/{{téléphone}}/g, order.customerPhone)
+                     .replace(/{{adresse}}/g, order.address);
 
 
-    let phone = order.customerPhone.replace(/[^0-9]/g, '');
+    let phoneForUrl = order.customerPhone.replace(/[^0-9]/g, '');
     // Automatically format for Morocco (+212)
-    if (phone.startsWith('0')) {
-      phone = '212' + phone.substring(1);
-    } else if (phone.length === 9 && !phone.startsWith('212')) {
+    if (phoneForUrl.startsWith('0')) {
+      phoneForUrl = '212' + phoneForUrl.substring(1);
+    } else if (phoneForUrl.length === 9 && !phoneForUrl.startsWith('212')) {
       // Handles cases like 6XXXXXXXX
-      phone = '212' + phone;
+      phoneForUrl = '212' + phoneForUrl;
     }
 
-    window.open(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`, '_blank');
+    let displayPhone = `+${phoneForUrl}`;
+    if (phoneForUrl.startsWith('212') && phoneForUrl.length === 12) {
+      displayPhone = `+212 ${phoneForUrl.substring(3, 6)}-${phoneForUrl.substring(6, 9)}-${phoneForUrl.substring(9)}`;
+    }
+    
+    setWhatsappPreviewData({ phone: displayPhone, message, rawPhone: phoneForUrl });
+  };
+
+  const handleConfirmWhatsApp = () => {
+    if (whatsappPreviewData) {
+      window.open(`https://wa.me/${whatsappPreviewData.rawPhone}?text=${encodeURIComponent(whatsappPreviewData.message)}`, '_blank');
+      setWhatsappPreviewData(null);
+    }
   };
   
   const handleAddOrder = (newOrderData: Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount'>) => {
@@ -763,6 +779,13 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         isOpen={isAddProductModalOpen}
         onClose={() => setIsAddProductModalOpen(false)}
         onAddProduct={handleAddProduct}
+      />
+      <WhatsAppPreviewModal
+        isOpen={!!whatsappPreviewData}
+        onClose={() => setWhatsappPreviewData(null)}
+        onConfirm={handleConfirmWhatsApp}
+        phone={whatsappPreviewData?.phone || ''}
+        message={whatsappPreviewData?.message || ''}
       />
     </div>
   );

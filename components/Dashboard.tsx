@@ -1,5 +1,11 @@
 
 
+
+
+
+
+
+
 import React, { useMemo, useState } from 'react';
 import { Order, Statut, Livraison, CommandeRetour } from '../types';
 import {
@@ -252,15 +258,14 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
   }, [confirmedOrders, salesTimeFilter, salesProductFilter]);
 
   const categoryData = useMemo(() => {
-    // FIX: Explicitly typing the accumulator of reduce ensures that salesByProduct is correctly inferred as Record<string, number>.
-    // FIX: Add generic type to reduce to ensure correct type inference for the accumulator.
-    const salesByProduct = confirmedOrders.reduce<Record<string, number>>((acc, order) => {
+    const salesByProduct = confirmedOrders.reduce((acc, order) => {
       if (!acc[order.product]) {
         acc[order.product] = 0;
       }
       acc[order.product] += order.price;
       return acc;
-    }, {});
+    // FIX: Explicitly typing the initial value of reduce ensures that salesByProduct is correctly inferred as Record<string, number>.
+    }, {} as Record<string, number>);
 
     const totalSales = Object.values(salesByProduct).reduce((sum, val) => sum + val, 0);
 

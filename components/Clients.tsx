@@ -1,8 +1,10 @@
+
 import React, { useState, useMemo } from 'react';
 import { Client, Order, Statut } from '../types';
 import { useAuth } from '../contexts/AuthContext';
 import { useCustomization } from '../contexts/CustomizationContext';
-import { PlusCircle, Search, User, Phone, Home, ShoppingBag, DollarSign, Edit, Trash2, X, AlertCircle } from 'lucide-react';
+import { PlusCircle, Search, User, Phone, Home, ShoppingBag, DollarSign, Edit, Trash2, X, AlertCircle, ChevronDown } from 'lucide-react';
+import { colord } from 'colord';
 
 // Modal for Adding/Editing a Client
 interface ClientModalProps {
@@ -85,7 +87,7 @@ interface ClientsProps {
 
 const Clients: React.FC<ClientsProps> = ({ clients, setClients, orders }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedClient, setSelectedClient] = useState<Client | null>(null);
+  const [selectedClient, setSelectedClient] = useState<(Client & { totalOrders: number; totalSpent: number; orders: Order[] }) | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const { formatCurrency, colors } = useCustomization();
@@ -143,111 +145,123 @@ const Clients: React.FC<ClientsProps> = ({ clients, setClients, orders }) => {
     setEditingClient(client);
     setIsModalOpen(true);
   };
-  
-  const currentClientProfile = useMemo(() => {
-    if (!selectedClient) return null;
-    return clientProfiles.find(p => p.id === selectedClient.id);
-  }, [selectedClient, clientProfiles]);
 
   return (
     <div className="space-y-6">
-      <h1 className="text-3xl font-bold">Clients</h1>
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 h-[calc(100vh-12rem)]">
-        {/* Client List */}
-        <div className="lg:col-span-1 flex flex-col p-4 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-semibold">Liste des clients</h2>
-            <button onClick={openModalToAdd} className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md" title="Ajouter un client">
-              <PlusCircle size={20} />
-            </button>
-          </div>
-          <div className="relative mb-4">
+       <div className="flex flex-wrap justify-between items-center gap-4">
+        <h1 className="text-3xl font-bold">Clients</h1>
+        <div className="flex items-center gap-4">
+          <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
             <input
               type="text"
               placeholder="Rechercher un client..."
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border rounded-md bg-transparent focus:ring-2 focus:ring-blue-500"
+              className="w-full md:w-64 pl-10 pr-4 py-2 border rounded-md bg-transparent focus:ring-2 focus:ring-blue-500"
             />
           </div>
-          <div className="flex-1 overflow-y-auto -mr-2 pr-2 border-t border-b dark:border-gray-700 divide-y dark:divide-gray-700">
-            {filteredClients.map(client => (
-              <div
-                key={client.id}
-                onClick={() => setSelectedClient(client)}
-                className={`p-3 cursor-pointer transition-colors ${selectedClient?.id === client.id ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-accent dark:hover:bg-dark-accent'}`}
-              >
-                <div className="font-semibold">{client.name}</div>
-                <div className="text-sm text-muted-foreground">{client.phone}</div>
-                <div className="text-xs text-muted-foreground mt-1">{client.totalOrders} commande(s)</div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Client Details */}
-        <div className="lg:col-span-2 flex flex-col p-4 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
-          {currentClientProfile ? (
-            <div className="flex flex-col h-full">
-                <div className="p-4 mb-4 rounded-lg border-2 border-blue-500 bg-blue-50/20 dark:bg-blue-900/10">
-                    <div className="flex justify-between items-start">
-                        <h2 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-2">Profil du Client</h2>
-                        <div className="flex items-center gap-2">
-                           <button onClick={() => openModalToEdit(currentClientProfile)} className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md" title="Modifier"><Edit size={16} /></button>
-                           <button onClick={() => handleDeleteClient(currentClientProfile.id)} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md" title="Supprimer"><Trash2 size={16} /></button>
-                        </div>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
-                        <div className="flex items-center gap-2"><User size={14} className="text-muted-foreground"/> <strong>{currentClientProfile.name}</strong></div>
-                        <div className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground"/> {currentClientProfile.phone}</div>
-                        <div className="flex items-center gap-2 col-span-full"><Home size={14} className="text-muted-foreground"/> {currentClientProfile.address || "Non spécifiée"}</div>
-                        <div className="flex items-center gap-2"><ShoppingBag size={14} className="text-muted-foreground"/> {currentClientProfile.totalOrders} Commande(s)</div>
-                        <div className="flex items-center gap-2"><DollarSign size={14} className="text-muted-foreground"/> {formatCurrency(currentClientProfile.totalSpent)} Dépensé</div>
-                    </div>
-                </div>
-
-              <h3 className="text-lg font-semibold mb-2">Historique des Commandes</h3>
-              <div className="flex-1 overflow-y-auto">
-                <table className="w-full text-xs text-left">
-                  <thead className="text-xs text-muted-foreground uppercase bg-secondary dark:bg-dark-secondary sticky top-0">
-                    <tr>
-                      <th className="p-2">Date</th>
-                      <th className="p-2">Produit</th>
-                      <th className="p-2 text-right">Prix</th>
-                      <th className="p-2">Statut</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y dark:divide-gray-700">
-                    {currentClientProfile.orders.map(order => {
-                      const statusColor = colors.statut[order.statut];
-                      return (
-                        <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
-                          <td className="p-2">{new Date(order.date).toLocaleDateString()}</td>
-                          <td className="p-2 font-medium">{order.product}</td>
-                          <td className="p-2 text-right">{formatCurrency(order.price)}</td>
-                          <td className="p-2">
-                             <span className="px-2 py-1 text-xs font-semibold rounded-full" style={{ backgroundColor: statusColor, color: 'white' }}>
-                                {order.statut}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          ) : (
-            <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
-              <AlertCircle size={48} className="mb-4" />
-              <h3 className="text-lg font-semibold">Aucun client sélectionné</h3>
-              <p className="max-w-xs">Veuillez sélectionner un client dans la liste de gauche pour voir ses détails et son historique de commandes.</p>
-            </div>
-          )}
+          <button onClick={openModalToAdd} className="flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700" title="Ajouter un client">
+            <PlusCircle size={16} />
+            Ajouter
+          </button>
         </div>
       </div>
       
+      <div className="bg-card dark:bg-dark-card rounded-xl shadow-sm border dark:border-gray-800">
+         <div className="hidden md:grid grid-cols-[1fr_1fr_2fr_auto] gap-4 items-center p-3 px-4 text-xs font-semibold text-muted-foreground border-b dark:border-gray-800">
+            <div>Nom du client</div>
+            <div>Téléphone</div>
+            <div>Adresse</div>
+            <div className="w-5"></div>
+        </div>
+        <div className="space-y-1 p-2">
+            {filteredClients.map(client => {
+            const isSelected = selectedClient?.id === client.id;
+            return (
+                <div key={client.id} className="rounded-lg overflow-hidden border dark:border-gray-700 transition-shadow hover:shadow-md">
+                <div
+                    onClick={() => setSelectedClient(isSelected ? null : client)}
+                    className={`grid grid-cols-2 md:grid-cols-[1fr_1fr_2fr_auto] gap-x-4 gap-y-1 items-center p-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-accent dark:hover:bg-dark-accent'}`}
+                >
+                    <div className="font-semibold truncate col-span-2 md:col-span-1">{client.name}</div>
+                    <div className="text-sm text-muted-foreground truncate">{client.phone}</div>
+                    <div className="text-sm text-muted-foreground truncate col-span-2 md:col-span-1">{client.address}</div>
+                    <div className="justify-self-end">
+                    <ChevronDown size={20} className={`transition-transform duration-200 ${isSelected ? 'rotate-180' : ''}`} />
+                    </div>
+                </div>
+
+                {isSelected && (
+                    <div className="p-4 bg-secondary dark:bg-dark-secondary/50">
+                    <div className="p-4 mb-4 rounded-lg border-2 border-blue-500 bg-blue-50/20 dark:bg-blue-900/10">
+                        <div className="flex justify-between items-start">
+                        <h2 className="text-xl font-bold text-blue-600 dark:text-blue-400 mb-2">Profil du Client</h2>
+                        <div className="flex items-center gap-2">
+                            <button onClick={() => openModalToEdit(client)} className="p-1.5 text-blue-600 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md" title="Modifier"><Edit size={16} /></button>
+                            <button onClick={() => handleDeleteClient(client.id)} className="p-1.5 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/50 rounded-md" title="Supprimer"><Trash2 size={16} /></button>
+                        </div>
+                        </div>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+                            <div className="flex items-center gap-2"><User size={14} className="text-muted-foreground"/> <strong>{client.name}</strong></div>
+                            <div className="flex items-center gap-2"><Phone size={14} className="text-muted-foreground"/> {client.phone}</div>
+                            <div className="flex items-center gap-2 col-span-full"><Home size={14} className="text-muted-foreground"/> {client.address || "Non spécifiée"}</div>
+                            <div className="flex items-center gap-2"><ShoppingBag size={14} className="text-muted-foreground"/> {client.totalOrders} Commande(s)</div>
+                            <div className="flex items-center gap-2"><DollarSign size={14} className="text-muted-foreground"/> {formatCurrency(client.totalSpent)} Dépensé</div>
+                        </div>
+                    </div>
+
+                    <h3 className="text-lg font-semibold mb-2">Historique des Commandes</h3>
+                    <div className="overflow-y-auto max-h-60 rounded-lg border dark:border-gray-700 bg-card dark:bg-dark-card">
+                        <table className="w-full text-xs text-left">
+                        <thead className="text-xs text-muted-foreground uppercase bg-secondary dark:bg-dark-secondary/80 sticky top-0">
+                            <tr>
+                            <th className="p-2">Date</th>
+                            <th className="p-2">Produit</th>
+                            <th className="p-2 text-right">Prix</th>
+                            <th className="p-2">Statut</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y dark:divide-gray-700">
+                            {client.orders.map(order => {
+                            const statusColor = colors.statut[order.statut];
+                            const textColor = colord(statusColor).isDark() ? 'text-white' : 'text-black';
+                            return (
+                                <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
+                                <td className="p-2">{new Date(order.date).toLocaleDateString()}</td>
+                                <td className="p-2 font-medium">{order.product}</td>
+                                <td className="p-2 text-right">{formatCurrency(order.price)}</td>
+                                <td className="p-2">
+                                    <span className="px-2 py-1 text-xs font-semibold rounded-full" style={{ backgroundColor: statusColor, color: textColor }}>
+                                        {order.statut}
+                                    </span>
+                                </td>
+                                </tr>
+                            );
+                            })}
+                        </tbody>
+                        </table>
+                         {client.orders.length === 0 && (
+                            <div className="p-4 text-center text-sm text-muted-foreground">
+                                Aucune commande trouvée pour ce client.
+                            </div>
+                         )}
+                    </div>
+                    </div>
+                )}
+                </div>
+            )
+            })}
+            {filteredClients.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+                <AlertCircle size={48} className="mb-4" />
+                <h3 className="text-lg font-semibold">Aucun client trouvé</h3>
+                <p className="max-w-xs">Essayez d'ajuster votre recherche ou d'ajouter un nouveau client.</p>
+                </div>
+            )}
+        </div>
+      </div>
+
       <ClientModal 
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
