@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 import React, { useMemo, useState } from 'react';
 import { Order, Statut, Livraison, CommandeRetour } from '../types';
 import {

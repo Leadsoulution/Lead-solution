@@ -37,7 +37,12 @@ export const IntegrationsProvider: React.FC<{ children: ReactNode }> = ({ childr
   const [integrations, setIntegrations] = useState<Record<PlatformIntegration, IntegrationSettings>>(() => {
     try {
       const savedIntegrations = localStorage.getItem('platformIntegrations');
-      return savedIntegrations ? JSON.parse(savedIntegrations) : initialIntegrationsState;
+      const loadedIntegrations = savedIntegrations ? JSON.parse(savedIntegrations) : {};
+       // Deep merge to ensure new integrations are added if the stored object is outdated
+      return {
+        ...initialIntegrationsState,
+        ...loadedIntegrations
+      };
     } catch (error) {
       console.error("Failed to load integrations from localStorage", error);
       return initialIntegrationsState;

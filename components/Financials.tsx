@@ -1,11 +1,3 @@
-
-
-
-
-
-
-
-
 import React, { useMemo, useState, useEffect } from 'react';
 import { Order, Product, Livraison } from '../types';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -92,8 +84,8 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
     }
   }, [notification]);
   
-  // Apply the FinancialCosts interface to the useState hook to fix typing issues.
-  // Replace the unsafe useState initializer with a type-safe version that correctly parses and coerces values from localStorage.
+  // FIX: Apply the FinancialCosts interface to the useState hook to fix typing issues.
+  // This ensures that all properties of the `costs` object are correctly typed as numbers, preventing errors in calculations and component props.
   const [costs, setCosts] = useState<FinancialCosts>(() => {
     try {
         const savedCosts = localStorage.getItem('financialCosts');
@@ -212,8 +204,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   };
 
   const financialAnalysis = useMemo(() => {
-    // Add Number() casting to ensure values are numeric for the reduce operation.
-    const totalPerUnitCost = Object.values(costs.perUnit).reduce((sum, cost) => sum + Number(cost), 0);
+    const totalPerUnitCost = Object.values(costs.perUnit).reduce((sum, cost) => sum + cost, 0);
 
     return products.map(product => {
       const { sellingPrice, purchasePrice } = product;
@@ -246,8 +237,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   }, [orders, products, costs]);
 
   const overviewStats = useMemo(() => {
-    // Add Number() casting to ensure values are numeric for the reduce operation.
-    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + Number(cost), 0);
+    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
     const totalRevenue = financialAnalysis.reduce((sum, p) => sum + (p?.total_revenue || 0), 0);
     const totalProductLinesExpenses = financialAnalysis.reduce((sum, p) => sum + (p?.total_product_line_expenses || 0), 0);
     const totalExpenses = totalProductLinesExpenses + totalMonthlyFixedCosts;
@@ -272,8 +262,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
         }
     });
 
-    // Add Number() casting to ensure values are numeric for the reduce operation.
-    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + Number(cost), 0);
+    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
     const currentMonth = new Date().getMonth();
     
     return data.map((monthData, index) => {
@@ -286,10 +275,8 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
 
   }, [orders, financialAnalysis, costs.monthlyFixed]);
 
-  // Add Number() casting to ensure values are numeric for the reduce operation.
-  const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((s, c) => s + Number(c), 0);
-  // Add Number() casting to ensure values are numeric for the reduce operation.
-  const totalPerUnitCosts = Object.values(costs.perUnit).reduce((s, c) => s + Number(c), 0);
+  const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((s, c) => s + c, 0);
+  const totalPerUnitCosts = Object.values(costs.perUnit).reduce((s, c) => s + c, 0);
   const inputClass = "w-28 text-right py-1 rounded-md border bg-secondary dark:bg-dark-secondary focus:ring-1 focus:ring-blue-500 ml-auto block";
   
   const formatNumberForCalc = (num: number, decimalPlaces = 2) => {

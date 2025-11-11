@@ -137,16 +137,19 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   };
   
   const handleProductChange = (orderId: string, newProductName: string) => {
-    const newProduct = products.find(p => p.name === newProductName);
-    if (newProduct) {
-      setOrders(prevOrders =>
-        prevOrders.map(order =>
-          order.id === orderId
-            ? { ...order, product: newProductName, price: newProduct.sellingPrice }
-            : order
-        )
-      );
-    }
+    const newProduct = products.find(p => p.name.toLowerCase() === newProductName.toLowerCase());
+    setOrders(prevOrders =>
+      prevOrders.map(order => {
+        if (order.id === orderId) {
+          const updatedOrder = { ...order, product: newProductName };
+          if (newProduct) {
+            updatedOrder.price = newProduct.sellingPrice;
+          }
+          return updatedOrder;
+        }
+        return order;
+      })
+    );
   };
 
    const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
@@ -658,17 +661,14 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             ) : (
                                 <div className="h-10 w-10 bg-secondary dark:bg-dark-secondary rounded-md flex-shrink-0"></div>
                             )}
-                             <select
+                             <input
+                                type="text"
                                 value={order.product}
                                 onChange={(e) => handleProductChange(order.id, e.target.value)}
                                 className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={!isEditable}
-                              >
-                                  <option value="" disabled>-- Sélectionner --</option>
-                                  {products.map(p => (
-                                      <option key={p.id} value={p.name}>{p.name}</option>
-                                  ))}
-                              </select>
+                                placeholder="Nom du produit..."
+                              />
                         </div>
                       </td>
                       <td className="p-1 border min-w-[100px]">
