@@ -28,10 +28,21 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: name === 'price' ? parseFloat(value) || 0 : value,
-    }));
+    
+    // Auto-fill price when product changes
+    if (name === 'product') {
+        const selectedProduct = products.find(p => p.name === value);
+        setFormData(prev => ({
+            ...prev,
+            product: value,
+            price: selectedProduct ? selectedProduct.sellingPrice : prev.price
+        }));
+    } else {
+        setFormData(prev => ({
+            ...prev,
+            [name]: name === 'price' ? parseFloat(value) || 0 : value,
+        }));
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -78,7 +89,7 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
             >
               <option value="" disabled>-- Sélectionner un produit --</option>
               {products.map(p => (
-                <option key={p.id} value={p.name}>{p.name}</option>
+                <option key={p.id} value={p.name}>[{p.id}] {p.name}</option>
               ))}
             </select>
           </div>

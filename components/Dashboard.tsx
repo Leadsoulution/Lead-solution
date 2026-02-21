@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Order, Statut, Livraison, CommandeRetour } from '../types';
 import {
@@ -15,7 +16,7 @@ const StatCard: React.FC<{ title: string; value: string; percentage?: string; co
     <p className="text-sm text-white/90">{title}</p>
     <div className="flex items-baseline gap-4 mt-2">
       <p className="text-3xl font-bold">{value}</p>
-      {percentage && <p className="text-sm font-medium">{percentage}</p>}
+      {percentage && <p className="text-sm font-medium opacity-90">{percentage}</p>}
     </div>
   </div>
 );
@@ -200,10 +201,25 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
   }, [filteredOrders]);
 
   const stats = useMemo(() => {
+    const totalOrders = filteredOrders.length;
     const totalShipments = confirmedOrders.length;
 
+    const confirmationRate = totalOrders > 0 
+        ? `${((totalShipments / totalOrders) * 100).toFixed(0)}%` 
+        : '0%';
+
     if (totalShipments === 0) {
-      return { totalShipments: 0, activeShipments: 0, completedOrders: 0, returnedOrders: 0, averageOrderValue: 0, activePercentage: '0%', completedPercentage: '0%', returnedPercentage: '0%' };
+      return { 
+        totalShipments: 0, 
+        confirmationRate, 
+        activeShipments: 0, 
+        completedOrders: 0, 
+        returnedOrders: 0, 
+        averageOrderValue: 0, 
+        activePercentage: '0%', 
+        completedPercentage: '0%', 
+        returnedPercentage: '0%' 
+      };
     }
 
     const totalRevenue = confirmedOrders.reduce((sum, order) => sum + order.price, 0);
@@ -226,6 +242,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     
     return {
       totalShipments,
+      confirmationRate,
       activeShipments,
       completedOrders,
       returnedOrders,
@@ -234,7 +251,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
       completedPercentage: `${(completedOrders / totalShipments * 100).toFixed(0)}% of total`,
       returnedPercentage: `${(returnedOrders / totalShipments * 100).toFixed(0)}% of total`
     };
-  }, [confirmedOrders]);
+  }, [confirmedOrders, filteredOrders]);
 
   const shipmentChartData = useMemo(() => {
     const aggregated = filterAndAggregateData(confirmedOrders, shipmentTimeFilter);
@@ -249,7 +266,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     return aggregated.map(({ name, sales }) => ({ name, sales }));
   }, [confirmedOrders, salesTimeFilter, salesProductFilter]);
 
-  const categoryData = useMemo(() => {
+  const categoryData = useMemo<{ name: string; value: number; percentage: string }[]>(() => {
     const salesByProduct = confirmedOrders.reduce((acc, order) => {
       if (!acc[order.product]) {
         acc[order.product] = 0;
@@ -259,7 +276,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     // FIX: Explicitly typing the initial value of reduce ensures that salesByProduct is correctly inferred as Record<string, number>.
     }, {} as Record<string, number>);
 
-    const totalSales = Object.values(salesByProduct).reduce((sum, val) => sum + val, 0);
+    const totalSales = (Object.values(salesByProduct) as number[]).reduce((sum: number, val: number) => sum + val, 0);
 
     return Object.entries(salesByProduct)
       .map(([name, value]) => ({ name, value, percentage: totalSales > 0 ? ((value / totalSales) * 100).toFixed(0) : '0' }))
@@ -267,7 +284,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
       .slice(0, 6);
   }, [confirmedOrders]);
 
-  const avgCheckData = useMemo(() => {
+  const avgCheckData = useMemo<{ name: string; value: number }[]>(() => {
     const checkByProduct: Record<string, { total: number; count: number }> = {};
     confirmedOrders.forEach(order => {
         if (!checkByProduct[order.product]) checkByProduct[order.product] = { total: 0, count: 0 };
@@ -276,12 +293,17 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     });
     
     return Object.entries(checkByProduct)
-        .map(([name, data]) => ({ name, value: data.total / data.count }))
+        .map(([name, data]: [string, { total: number; count: number }]) => ({ name, value: data.total / data.count }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 6);
   }, [confirmedOrders]);
 
-  const deliveryTimeData = [
+  const maxCheckValue = useMemo(() => {
+    const values = avgCheckData.map(d => d.value);
+    return values.length > 0 ? Math.max(...values) : 1;
+  }, [avgCheckData]);
+
+  const deliveryTimeData: { name: string; days: number }[] = [
     { name: 'Alabama', days: 12 }, { name: 'Florida', days: 8 }, { name: 'Missouri', days: 6 },
     { name: 'California', days: 5 }, { name: 'New York', days: 2 }
   ];
@@ -364,7 +386,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">
-        <StatCard title="Commandes Confirmées" value={stats.totalShipments.toLocaleString()} color="bg-blue-700" />
+        <StatCard title="Commandes Confirmées" value={stats.totalShipments.toLocaleString()} percentage={`${stats.confirmationRate} Taux de conf.`} color="bg-blue-700" />
         <StatCard title="Active Shipments" value={stats.activeShipments.toLocaleString()} percentage={stats.activePercentage} color="bg-sky-500" />
         <StatCard title="Livré" value={stats.completedOrders.toLocaleString()} percentage={stats.completedPercentage} color="bg-emerald-500" />
         <StatCard title="Returned" value={stats.returnedOrders.toLocaleString()} percentage={stats.returnedPercentage} color="bg-rose-500" />
@@ -443,14 +465,14 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
         <div className="p-6 rounded-2xl border bg-card text-card-foreground shadow-sm dark:bg-dark-card dark:text-dark-card-foreground">
           <h3 className="text-lg font-semibold mb-4">Av. Check</h3>
           <div className="space-y-3 pt-2">
-            {avgCheckData.map((entry, index) => (
+            {avgCheckData.map((entry: { name: string; value: number }, index: number) => (
                 <div key={entry.name} className="flex flex-col">
                     <div className="flex justify-between text-sm mb-1">
                         <span className="font-medium">{entry.name}</span>
                         <span className="font-semibold">{formatCurrency(entry.value)}</span>
                     </div>
                     <div className="w-full bg-secondary dark:bg-dark-secondary rounded-full h-2.5">
-                        <div className="h-2.5 rounded-full" style={{ width: `${(entry.value / Math.max(...avgCheckData.map(d => d.value)))*100}%`, backgroundColor: `rgba(59, 130, 246, ${1 - index*0.15})` }}></div>
+                        <div className="h-2.5 rounded-full" style={{ width: `${(entry.value / maxCheckValue)*100}%`, backgroundColor: `rgba(59, 130, 246, ${1 - index*0.15})` }}></div>
                     </div>
                 </div>
             ))}
@@ -459,7 +481,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
         <div className="p-6 rounded-2xl border bg-card text-card-foreground shadow-sm dark:bg-dark-card dark:text-dark-card-foreground">
           <h3 className="text-lg font-semibold mb-4">Av. Delivery Time</h3>
           <div className="space-y-3 pt-2">
-            {deliveryTimeData.map(entry => {
+            {deliveryTimeData.map((entry: { name: string; days: number }) => {
                 let color = '#4ade80'; if (entry.days > 5) color = '#facc15'; if (entry.days > 8) color = '#f87171';
                 return (
                     <div key={entry.name} className="flex flex-col">

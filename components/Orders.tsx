@@ -1,7 +1,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product, Role } from '../types';
-import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle, Trash2 } from 'lucide-react';
+import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle, Trash2, RefreshCw } from 'lucide-react';
 import ColorSelector from './ColorSelector';
 import { useAuth } from '../contexts/AuthContext';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -16,9 +16,10 @@ interface OrdersProps {
   setOrders: React.Dispatch<React.SetStateAction<Order[]>>;
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
+  onSync: () => void;
 }
 
-const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts }) => {
+const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts, onSync }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const { users, currentUser } = useAuth();
   const { messageTemplates, formatCurrency } = useCustomization();
@@ -30,6 +31,16 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   const [selectedProductFilter, setSelectedProductFilter] = useState<string | null>(null);
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [whatsappPreviewData, setWhatsappPreviewData] = useState<{ phone: string; message: string; rawPhone: string; } | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncClick = async () => {
+    setIsSyncing(true);
+    try {
+        await onSync();
+    } finally {
+        setIsSyncing(false);
+    }
+  };
 
   useEffect(() => {
     if (notification) {
@@ -136,12 +147,21 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     );
   };
   
-  const handleProductChange = (orderId: string, newProductName: string) => {
-    const newProduct = products.find(p => p.name.toLowerCase() === newProductName.toLowerCase());
+  const handleProductChange = (orderId: string, inputVal: string) => {
+    // Try to find product by Name OR by ID (Code Article)
+    const newProduct = products.find(p => 
+        p.name.toLowerCase() === inputVal.toLowerCase() || 
+        p.id.toLowerCase() === inputVal.toLowerCase()
+    );
+
     setOrders(prevOrders =>
       prevOrders.map(order => {
         if (order.id === orderId) {
-          const updatedOrder = { ...order, product: newProductName };
+          // If we found a matching product (by ID or Name), use its official Name and Price
+          const updatedOrder = { 
+              ...order, 
+              product: newProduct ? newProduct.name : inputVal 
+          };
           if (newProduct) {
             updatedOrder.price = newProduct.sellingPrice;
           }
@@ -248,30 +268,53 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
             const rows = text.split('\n').filter(row => row.trim() !== '');
             if (rows.length < 2) throw new Error("Le fichier CSV doit avoir un en-tête et au moins une ligne de données.");
 
-            const header = rows[0].split(',').map(h => h.trim());
+            // Detect delimiter (comma or semicolon) based on first line
+            const firstLine = rows[0];
+            const delimiter = firstLine.includes(';') ? ';' : ',';
+
+            const header = firstLine.split(delimiter).map(h => h.trim().replace(/"/g, ''));
             const expectedHeaders = ['customerName', 'customerPhone', 'address', 'price', 'product', 'noteClient'];
-            const headerMap = expectedHeaders.map(h => header.indexOf(h));
+            
+            // Loose matching for headers (case insensitive)
+            const headerMap = expectedHeaders.map(h => header.findIndex(head => head.toLowerCase().includes(h.toLowerCase())));
 
             if (headerMap.some(index => index === -1)) {
-                throw new Error(`En-tête CSV manquant ou incorrect. Attendu : ${expectedHeaders.join(', ')}`);
+                 // Try to be smart: if headers are missing, assume standard column order if row has enough columns
+                 console.warn("Headers missing, trying positional assumption.");
             }
+            
+            // Map indices or fallback to 0,1,2,3,4,5
+            const idx = {
+                name: headerMap[0] !== -1 ? headerMap[0] : 0,
+                phone: headerMap[1] !== -1 ? headerMap[1] : 1,
+                addr: headerMap[2] !== -1 ? headerMap[2] : 2,
+                price: headerMap[3] !== -1 ? headerMap[3] : 3,
+                prod: headerMap[4] !== -1 ? headerMap[4] : 4,
+                note: headerMap[5] !== -1 ? headerMap[5] : 5,
+            };
 
             const newOrders: Order[] = rows.slice(1).map((rowStr, index) => {
-                const values = rowStr.split(',');
-                const price = parseFloat(values[headerMap[3]]);
-                if (isNaN(price)) {
-                    throw new Error(`Prix non valide à la ligne ${index + 2}.`);
-                }
+                const values = rowStr.split(delimiter).map(val => val.trim().replace(/"/g, ''));
                 
+                // Skip empty lines
+                if (values.length <= 1) return null;
+
+                // Resolve Product: Check if input matches ID or Name
+                const productInput = values[idx.prod] || 'Produit inconnu';
+                const matchedProduct = products.find(p => p.id === productInput || p.name === productInput);
+                
+                const productName = matchedProduct ? matchedProduct.name : productInput;
+                const productPrice = matchedProduct ? matchedProduct.sellingPrice : parseFloat(values[idx.price]?.replace(',', '.') || '0');
+
                 return {
                     id: `import-${Date.now()}-${index}`,
                     date: new Date().toISOString(),
-                    customerName: values[headerMap[0]]?.trim() || '',
-                    customerPhone: values[headerMap[1]]?.trim() || '',
-                    address: values[headerMap[2]]?.trim() || '',
-                    price: price,
-                    product: values[headerMap[4]]?.trim() || '',
-                    noteClient: values[headerMap[5]]?.trim() || '',
+                    customerName: values[idx.name] || 'Inconnu',
+                    customerPhone: values[idx.phone] || '',
+                    address: values[idx.addr] || '',
+                    price: isNaN(productPrice) ? 0 : productPrice,
+                    product: productName,
+                    noteClient: values[idx.note] || '',
                     platform: Platform.Manual,
                     statut: Statut.PasDeReponse,
                     assignedUserId: null,
@@ -281,7 +324,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     commandeRetour: CommandeRetour.NonRetourne,
                     callCount: 0,
                 };
-            });
+            }).filter(o => o !== null) as Order[];
 
             setOrders(prev => [...newOrders, ...prev]);
             setNotification({ type: 'success', message: `${newOrders.length} commandes importées avec succès.` });
@@ -427,6 +470,14 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
               />
             </div>
             <div className="flex items-center gap-2 w-full md:w-auto flex-wrap justify-end">
+                <button
+                    onClick={handleSyncClick}
+                    disabled={isSyncing}
+                    className="flex items-center justify-center gap-2 px-4 py-2 border text-sm font-medium rounded-md shadow-sm text-secondary-foreground bg-secondary hover:bg-accent disabled:opacity-70"
+                >
+                    <RefreshCw size={16} className={isSyncing ? "animate-spin" : ""} />
+                    {isSyncing ? 'Sync...' : 'Synchroniser'}
+                </button>
                 <button
                     onClick={() => setShowFilters(!showFilters)}
                     className="flex items-center justify-center gap-2 px-4 py-2 border text-sm font-medium rounded-md shadow-sm text-secondary-foreground bg-secondary hover:bg-accent"
@@ -667,7 +718,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                                 onChange={(e) => handleProductChange(order.id, e.target.value)}
                                 className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                                 disabled={!isEditable}
-                                placeholder="Nom du produit..."
+                                placeholder="Nom ou ID produit..."
                               />
                         </div>
                       </td>

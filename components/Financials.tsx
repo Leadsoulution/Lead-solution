@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState, useEffect } from 'react';
 import { Order, Product, Livraison } from '../types';
 import { useCustomization } from '../contexts/CustomizationContext';
@@ -8,6 +9,20 @@ import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipCont
 interface FinancialsProps {
   orders: Order[];
   products: Product[];
+}
+
+interface ProductAnalysis extends Product {
+    quantity_sold: number;
+    costs: {
+      per_unit_cost: number;
+      variable_cost: number;
+      total_cost_per_unit_sold: number;
+      net_profit_per_unit: number;
+      margin_percent: number;
+    };
+    total_revenue: number;
+    total_product_line_expenses: number;
+    total_product_line_profit: number;
 }
 
 const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string; }> = ({ title, value, icon, color }) => (
@@ -23,10 +38,11 @@ const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; 
 const CustomTooltip: React.FC<TooltipProps<ValueType, NameType>> = ({ active, payload, label }) => {
   const { formatCurrency } = useCustomization();
   if (active && payload && payload.length) {
+    const val = payload[0].value;
     return (
       <div className="p-3 bg-card dark:bg-dark-card rounded-lg shadow-lg border dark:border-gray-700">
         <p className="font-semibold">{label}</p>
-        <p className="text-sm text-emerald-500">{`Profit: ${formatCurrency(Number(payload[0].value))}`}</p>
+        <p className="text-sm text-emerald-500">{`Profit: ${formatCurrency(Number(val))}`}</p>
       </div>
     );
   }
@@ -67,15 +83,35 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   const [notification, setNotification] = useState<string | null>(null);
 
   // Apply the CalculatorData interface to the useState hook.
-  const [calculatorData, setCalculatorData] = useState<CalculatorData>({
-    leads: 1000,
-    adSpend: 20000,
-    confRate: 60,
-    delivRate: 50,
-    sellingPrice: 250,
-    productCost: 100,
-    shippingFee: 40,
+  const [calculatorData, setCalculatorData] = useState<CalculatorData>(() => {
+    try {
+      const savedData = localStorage.getItem('financialCalculatorData');
+      return savedData ? JSON.parse(savedData) : {
+        leads: 1000,
+        adSpend: 20000,
+        confRate: 60,
+        delivRate: 50,
+        sellingPrice: 250,
+        productCost: 100,
+        shippingFee: 40,
+      };
+    } catch (e) {
+      return {
+        leads: 1000,
+        adSpend: 20000,
+        confRate: 60,
+        delivRate: 50,
+        sellingPrice: 250,
+        productCost: 100,
+        shippingFee: 40,
+      };
+    }
   });
+
+  // Auto-save calculator data whenever it changes
+  useEffect(() => {
+    localStorage.setItem('financialCalculatorData', JSON.stringify(calculatorData));
+  }, [calculatorData]);
 
   useEffect(() => {
     if (notification) {
@@ -84,8 +120,6 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
     }
   }, [notification]);
   
-  // FIX: Apply the FinancialCosts interface to the useState hook to fix typing issues.
-  // This ensures that all properties of the `costs` object are correctly typed as numbers, preventing errors in calculations and component props.
   const [costs, setCosts] = useState<FinancialCosts>(() => {
     try {
         const savedCosts = localStorage.getItem('financialCosts');
@@ -132,31 +166,37 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   });
 
   const handleCostChange = (type: 'monthlyFixed' | 'perUnit' | 'variable', name: string, value: string) => {
+    // Allow empty string for better UX when deleting content
+    const numValue = value === '' ? 0 : parseFloat(value);
     setCosts(prev => ({
         ...prev,
         [type]: {
             ...prev[type],
-            [name]: parseFloat(value) || 0
+            [name]: isNaN(numValue) ? 0 : numValue
         }
     }));
   };
 
   const handleCalculatorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
+    const numValue = value === '' ? 0 : parseFloat(value);
+    
     setCalculatorData(prev => ({
         ...prev,
-        [name]: parseFloat(value.replace(',', '.')) || 0,
+        [name]: isNaN(numValue) ? 0 : numValue,
     }));
   };
   
  const handleCalculatedFieldChange = (name: string, value: string) => {
-    const numericValue = parseFloat(value.replace(',', '.')) || 0;
+    const numericValue = value === '' ? 0 : parseFloat(value);
+    if(isNaN(numericValue)) return;
 
     setCalculatorData(prev => {
         const newData = { ...prev };
 
         switch (name) {
             case 'cpl':
+                // Adjust AdSpend based on CPL
                 newData.adSpend = numericValue * prev.leads;
                 break;
             case 'ordersConfirmed':
@@ -203,8 +243,9 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
       setNotification('Frais sauvegardés avec succès !');
   };
 
-  const financialAnalysis = useMemo(() => {
-    const totalPerUnitCost = Object.values(costs.perUnit).reduce((sum, cost) => sum + cost, 0);
+  const financialAnalysis: ProductAnalysis[] = useMemo(() => {
+    // Explicitly type the reduce parameters and cast Object.values result
+    const totalPerUnitCost = (Object.values(costs.perUnit) as number[]).reduce((sum, cost) => sum + cost, 0);
 
     return products.map(product => {
       const { sellingPrice, purchasePrice } = product;
@@ -233,13 +274,14 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
         total_product_line_expenses: quantitySold * costPerUnitSold,
         total_product_line_profit: quantitySold * netProfitPerUnit,
       };
-    }).filter(p => p !== null);
+    }).filter((p): p is ProductAnalysis => p !== null);
   }, [orders, products, costs]);
 
   const overviewStats = useMemo(() => {
-    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
-    const totalRevenue = financialAnalysis.reduce((sum, p) => sum + (p?.total_revenue || 0), 0);
-    const totalProductLinesExpenses = financialAnalysis.reduce((sum, p) => sum + (p?.total_product_line_expenses || 0), 0);
+    // Explicitly type the reduce parameters and cast Object.values result
+    const totalMonthlyFixedCosts = (Object.values(costs.monthlyFixed) as number[]).reduce((sum: number, cost: number) => sum + cost, 0);
+    const totalRevenue = financialAnalysis.reduce<number>((sum, p) => sum + (p.total_revenue || 0), 0);
+    const totalProductLinesExpenses = financialAnalysis.reduce<number>((sum, p) => sum + (p.total_product_line_expenses || 0), 0);
     const totalExpenses = totalProductLinesExpenses + totalMonthlyFixedCosts;
     const totalProfit = totalRevenue - totalExpenses;
     return { totalRevenue, totalExpenses, totalProfit };
@@ -262,7 +304,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
         }
     });
 
-    const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((sum, cost) => sum + cost, 0);
+    const totalMonthlyFixedCosts = (Object.values(costs.monthlyFixed) as number[]).reduce((sum: number, cost: number) => sum + cost, 0);
     const currentMonth = new Date().getMonth();
     
     return data.map((monthData, index) => {
@@ -275,11 +317,14 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
 
   }, [orders, financialAnalysis, costs.monthlyFixed]);
 
-  const totalMonthlyFixedCosts = Object.values(costs.monthlyFixed).reduce((s, c) => s + c, 0);
-  const totalPerUnitCosts = Object.values(costs.perUnit).reduce((s, c) => s + c, 0);
+  // Use explicit types for reduce parameters
+  const totalMonthlyFixedCosts = (Object.values(costs.monthlyFixed) as number[]).reduce((s: number, c: number) => s + c, 0);
+  const totalPerUnitCosts = (Object.values(costs.perUnit) as number[]).reduce((s: number, c: number) => s + c, 0);
   const inputClass = "w-28 text-right py-1 rounded-md border bg-secondary dark:bg-dark-secondary focus:ring-1 focus:ring-blue-500 ml-auto block";
   
-  const formatNumberForCalc = (num: number, decimalPlaces = 2) => {
+  // Format number for display only, not for input values
+  const formatNumberForDisplay = (num: number, decimalPlaces = 2) => {
+    if (num === undefined || num === null) return "0";
     if (num % 1 === 0) {
       return String(num);
     }
@@ -289,11 +334,13 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   const CalcInputCell: React.FC<{ name: keyof CalculatorData; value: number; }> = ({ name, value }) => (
     <td className="p-0 border border-gray-500 dark:border-gray-600">
         <input
-            type="text"
+            type="number"
             name={name}
-            value={formatNumberForCalc(value)}
+            value={value === 0 ? '' : value}
             onChange={handleCalculatorChange}
-            className="w-full h-full p-2 bg-transparent text-center font-bold outline-none"
+            className="w-full h-full p-2 bg-transparent text-center font-bold outline-none appearance-none"
+            placeholder="0"
+            step="0.01"
         />
     </td>
 );
@@ -328,28 +375,28 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
                         <CalcInputCell name="leads" value={calculatorData.leads} />
                         <CalcInputCell name="adSpend" value={calculatorData.adSpend} />
                         <td className="p-0 border border-gray-500 dark:border-gray-600">
-                           <input type="text" value={formatNumberForCalc(calculatorResults.cpl)} onChange={(e) => handleCalculatedFieldChange('cpl', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" />
+                           <input type="number" value={Math.round(calculatorResults.cpl * 100) / 100} onChange={(e) => handleCalculatedFieldChange('cpl', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" step="0.01"/>
                         </td>
                         <td className="p-0 border border-gray-500 dark:border-gray-600">
                             <div className="relative h-full">
-                                <input type="text" name="confRate" value={formatNumberForCalc(calculatorData.confRate)} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none"/>
+                                <input type="number" name="confRate" value={calculatorData.confRate === 0 ? '' : calculatorData.confRate} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none" step="0.01"/>
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
                             </div>
                         </td>
                          <td className="p-0 border border-gray-500 dark:border-gray-600">
-                           <input type="text" value={formatNumberForCalc(calculatorResults.ordersConfirmed, 0)} onChange={(e) => handleCalculatedFieldChange('ordersConfirmed', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" />
+                           <input type="number" value={Math.round(calculatorResults.ordersConfirmed)} onChange={(e) => handleCalculatedFieldChange('ordersConfirmed', e.target.value)} className="w-full h-full p-2 bg-transparent text-center font-bold outline-none" step="1"/>
                         </td>
                         <td className="p-0 border border-gray-500 dark:border-gray-600">
                             <div className="relative h-full">
-                                <input type="text" name="delivRate" value={formatNumberForCalc(calculatorData.delivRate)} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none"/>
+                                <input type="number" name="delivRate" value={calculatorData.delivRate === 0 ? '' : calculatorData.delivRate} onChange={handleCalculatorChange} className="w-full h-full p-2 pr-6 bg-transparent text-center font-bold outline-none" step="0.01"/>
                                 <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
                             </div>
                         </td>
                         <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold">
-                           {formatNumberForCalc(calculatorResults.ordersDelivered, 0)}
+                           {formatNumberForDisplay(calculatorResults.ordersDelivered, 0)}
                         </td>
                         <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold text-red-600 dark:text-red-400">
-                           {formatNumberForCalc(calculatorResults.cpd)}
+                           {formatNumberForDisplay(calculatorResults.cpd)}
                         </td>
                     </tr>
                 </tbody>
@@ -373,13 +420,13 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
                         <CalcInputCell name="productCost" value={calculatorData.productCost} />
                         <CalcInputCell name="shippingFee" value={calculatorData.shippingFee} />
                         <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold text-green-900 dark:text-green-200">
-                            {formatNumberForCalc(calculatorResults.profitPerUnit)}
+                            {formatNumberForDisplay(calculatorResults.profitPerUnit)}
                         </td>
                         <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold">
-                             {formatNumberForCalc(calculatorResults.totalProfit, 0)}
+                             {formatNumberForDisplay(calculatorResults.totalProfit, 0)}
                         </td>
                         <td className="p-2 border border-gray-500 dark:border-gray-600 font-bold relative">
-                            <span>{formatNumberForCalc(calculatorResults.roi)}</span>
+                            <span>{formatNumberForDisplay(calculatorResults.roi)}</span>
                             <span className="absolute right-2 top-1/2 -translate-y-1/2">%</span>
                         </td>
                     </tr>
@@ -497,7 +544,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
             <LineChart data={monthlyProfitData} margin={{ top: 10, right: 20, left: -10, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" vertical={false} />
               <XAxis dataKey="name" fontSize={12} tickLine={false} axisLine={false} />
-              <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatCurrency(Number(value))} />
+              <YAxis fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value: number | string) => formatCurrency(Number(value))} />
               <Tooltip content={<CustomTooltip />} />
               <Line type="monotone" dataKey="profit" stroke="#22c55e" strokeWidth={3} dot={{ r: 4 }} activeDot={{ r: 8 }} />
             </LineChart>

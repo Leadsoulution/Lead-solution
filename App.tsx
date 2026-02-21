@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -16,6 +17,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { mockOrders, mockProducts, mockClients } from './services/mockData';
 import Integrations from './components/Integrations';
 import { IntegrationsProvider, useIntegrations } from './contexts/IntegrationsContext';
+import AIAnalysis from './components/AIAnalysis';
 
 const DashboardLayout: React.FC = () => {
   const { currentUser } = useAuth();
@@ -29,10 +31,38 @@ const DashboardLayout: React.FC = () => {
     return View.Dashboard;
   });
 
-  const [initialMockOrders] = useState<Order[]>(() => JSON.parse(JSON.stringify(mockOrders)));
-  const [orders, setOrders] = useState<Order[]>(initialMockOrders);
-  const [products, setProducts] = useState<Product[]>(() => JSON.parse(JSON.stringify(mockProducts)));
-  const [clients, setClients] = useState<Client[]>(() => JSON.parse(JSON.stringify(mockClients)));
+  // Load Orders from LocalStorage or fallback to Mock Data
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const savedOrders = localStorage.getItem('app_orders');
+      return savedOrders ? JSON.parse(savedOrders) : JSON.parse(JSON.stringify(mockOrders));
+    } catch (e) {
+      console.error("Failed to load orders", e);
+      return JSON.parse(JSON.stringify(mockOrders));
+    }
+  });
+
+  // Load Products from LocalStorage or fallback to Mock Data
+  const [products, setProducts] = useState<Product[]>(() => {
+    try {
+      const savedProducts = localStorage.getItem('app_products');
+      return savedProducts ? JSON.parse(savedProducts) : JSON.parse(JSON.stringify(mockProducts));
+    } catch (e) {
+      console.error("Failed to load products", e);
+      return JSON.parse(JSON.stringify(mockProducts));
+    }
+  });
+
+  // Load Clients from LocalStorage or fallback to Mock Data
+  const [clients, setClients] = useState<Client[]>(() => {
+    try {
+      const savedClients = localStorage.getItem('app_clients');
+      return savedClients ? JSON.parse(savedClients) : JSON.parse(JSON.stringify(mockClients));
+    } catch (e) {
+      console.error("Failed to load clients", e);
+      return JSON.parse(JSON.stringify(mockClients));
+    }
+  });
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -44,6 +74,21 @@ const DashboardLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
+  // Persist Orders to LocalStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('app_orders', JSON.stringify(orders));
+  }, [orders]);
+
+  // Persist Products to LocalStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('app_products', JSON.stringify(products));
+  }, [products]);
+
+  // Persist Clients to LocalStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('app_clients', JSON.stringify(clients));
+  }, [clients]);
+
   useEffect(() => {
     const root = window.document.documentElement;
     if (isDarkMode) {
@@ -58,83 +103,90 @@ const DashboardLayout: React.FC = () => {
   // Effect to fetch live data when an integration is connected
   useEffect(() => {
     const fetchWooCommerceOrders = async () => {
+      // Only fetch if we haven't already fetched (simple check to avoid overwriting manual edits in this demo)
+      // In a real app, you would merge data based on IDs.
       setIsLoading(true);
       console.log('Simulating fetch from WooCommerce...');
 
       // Simulate network delay
       await new Promise(resolve => setTimeout(resolve, 2000));
 
-      // This is where a real API call would happen.
-      // For this demo, we'll return new mock data to simulate a live connection.
-      const liveOrders: Order[] = [
+      // Simulate external data containing SKU (Code Article)
+      const rawExternalOrders = [
         {
           id: 'LIVE-WC-001',
           date: new Date().toISOString(),
           customerName: 'John Doe (Live)',
           customerPhone: '212611223344',
           address: '1 Live Street, Casablanca',
+          sku: 'WH-001', // Example SKU matching local product
+          fallbackProduct: 'Wireless Headphones',
           price: 150.00,
-          product: 'Wireless Headphones',
-          statut: Statut.PasDeReponse,
-          assignedUserId: null,
-          noteClient: 'Order fetched from live WooCommerce store.',
-          ramassage: Ramassage.NonRamasser,
-          livraison: Livraison.PasDeReponse,
-          remboursement: Remboursement.NonPayer,
-          commandeRetour: CommandeRetour.NonRetourne,
-          platform: Platform.WooCommerce,
-          callCount: 0,
         },
         {
           id: 'LIVE-WC-002',
-          date: new Date(Date.now() - 86400000).toISOString(), // Yesterday
+          date: new Date(Date.now() - 86400000).toISOString(),
           customerName: 'Jane Smith (Live)',
           customerPhone: '212655667788',
           address: '2 Live Avenue, Rabat',
+          sku: 'SW-001',
+          fallbackProduct: 'Smartwatch',
           price: 299.50,
-          product: 'Smartwatch',
-          statut: Statut.PasDeReponse,
-          assignedUserId: null,
-          noteClient: 'Urgent order from live integration.',
-          ramassage: Ramassage.NonRamasser,
-          livraison: Livraison.PasDeReponse,
-          remboursement: Remboursement.NonPayer,
-          commandeRetour: CommandeRetour.NonRetourne,
-          platform: Platform.WooCommerce,
-          callCount: 0,
         },
         {
           id: 'LIVE-WC-003',
-          date: new Date(Date.now() - 172800000).toISOString(), // 2 days ago
+          date: new Date(Date.now() - 172800000).toISOString(),
           customerName: 'Sam Wilson (Live)',
           customerPhone: '212612345678',
           address: '3 Integration Lane, Marrakech',
+          sku: 'LW-001',
+          fallbackProduct: 'Leather Wallet',
           price: 49.99,
-          product: 'Leather Wallet',
-          statut: Statut.PasDeReponse,
-          assignedUserId: null,
-          noteClient: '',
-          ramassage: Ramassage.NonRamasser,
-          livraison: Livraison.PasDeReponse,
-          remboursement: Remboursement.NonPayer,
-          commandeRetour: CommandeRetour.NonRetourne,
-          platform: Platform.WooCommerce,
-          callCount: 0,
         },
       ];
+
+      const liveOrders: Order[] = rawExternalOrders.map(raw => {
+          // Resolve Product by SKU (ID) first, then fallback to name
+          const matchedProduct = products.find(p => p.id === raw.sku);
+          
+          return {
+            id: raw.id,
+            date: raw.date,
+            customerName: raw.customerName,
+            customerPhone: raw.customerPhone,
+            address: raw.address,
+            // Use local name if SKU matched, otherwise use fallback name
+            product: matchedProduct ? matchedProduct.name : raw.fallbackProduct,
+            // Use local price if matched to ensure consistency, otherwise external price
+            price: matchedProduct ? matchedProduct.sellingPrice : raw.price,
+            statut: Statut.PasDeReponse,
+            assignedUserId: null,
+            noteClient: 'Imported from WooCommerce (SKU Match)',
+            ramassage: Ramassage.NonRamasser,
+            livraison: Livraison.PasDeReponse,
+            remboursement: Remboursement.NonPayer,
+            commandeRetour: CommandeRetour.NonRetourne,
+            platform: Platform.WooCommerce,
+            callCount: 0,
+          };
+      });
       
-      setOrders(liveOrders);
+      // Merge live orders with existing orders, avoiding duplicates by ID
+      setOrders(prevOrders => {
+        const existingIds = new Set(prevOrders.map(o => o.id));
+        const newUniqueOrders = liveOrders.filter(o => !existingIds.has(o.id));
+        return [...newUniqueOrders, ...prevOrders];
+      });
       setIsLoading(false);
       console.log('Live WooCommerce orders loaded.');
     };
 
     if (integrations.WooCommerce.isConnected) {
       fetchWooCommerceOrders();
-    } else {
-      // If disconnected, revert to original mock data
-      setOrders(initialMockOrders);
-    }
-  }, [integrations.WooCommerce.isConnected, initialMockOrders]);
+    } 
+    // Removed the else block that reset orders to mock data. 
+    // If disconnected, we keep the current local state.
+  }, [integrations.WooCommerce.isConnected, products]); // Added 'products' to dependency to ensure matching works if products change
 
 
   // Auto-create clients from orders if they don't exist
@@ -157,6 +209,40 @@ const DashboardLayout: React.FC = () => {
     }
   }, [orders]);
 
+  const handleSyncOrders = async () => {
+    setIsLoading(true);
+    // Simulate network delay
+    await new Promise(resolve => setTimeout(resolve, 2000));
+
+    if (integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected) {
+        // Simulate finding a new order
+        const randomProduct = products[Math.floor(Math.random() * products.length)];
+        const newLiveOrder: Order = {
+            id: `LIVE-SYNC-${Date.now().toString().slice(-6)}`,
+            date: new Date().toISOString(),
+            customerName: `Client Web ${Math.floor(Math.random() * 100)}`,
+            customerPhone: `2126${Math.floor(Math.random() * 100000000)}`,
+            address: `${Math.floor(Math.random() * 200)} Bd Mohammed V, Casablanca`,
+            product: randomProduct ? randomProduct.name : 'Produit Importé',
+            price: randomProduct ? randomProduct.sellingPrice : 299,
+            statut: Statut.PasDeReponse,
+            assignedUserId: null,
+            noteClient: 'Commande synchronisée depuis le site',
+            ramassage: Ramassage.NonRamasser,
+            livraison: Livraison.PasDeReponse,
+            remboursement: Remboursement.NonPayer,
+            commandeRetour: CommandeRetour.NonRetourne,
+            platform: integrations.WooCommerce.isConnected ? Platform.WooCommerce : (integrations.Shopify.isConnected ? Platform.Shopify : Platform.YouCan),
+            callCount: 0,
+        };
+        
+        setOrders(prev => [newLiveOrder, ...prev]);
+    } else {
+        alert("Veuillez d'abord connecter une boutique dans l'onglet Intégrations.");
+    }
+    setIsLoading(false);
+  };
+
 
   const renderView = () => {
     const isAdmin = currentUser?.role === Role.Admin;
@@ -166,11 +252,13 @@ const DashboardLayout: React.FC = () => {
       case View.Products:
         return <Products orders={orders} products={products} setProducts={setProducts} />;
       case View.Orders:
-        return <Orders orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} />;
+        return <Orders orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} onSync={handleSyncOrders} />;
       case View.Clients:
         return <Clients clients={clients} setClients={setClients} orders={orders} />;
       case View.Statistics:
         return <Statistics orders={orders} />;
+      case View.AIAnalysis:
+        return <AIAnalysis orders={orders} products={products} clients={clients} />;
       case View.Settings:
         return <Settings />;
       case View.AdminPanel:
@@ -224,7 +312,7 @@ const DashboardLayout: React.FC = () => {
 
       <div className="flex-1 flex flex-col overflow-hidden">
         <header className="flex justify-between items-center p-4 bg-card dark:bg-dark-card lg:hidden border-b border-gray-200 dark:border-gray-800">
-          <h1 className="text-xl font-bold">OrderSync</h1>
+          <h1 className="text-xl font-bold">Orderly</h1>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2">
             {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
           </button>

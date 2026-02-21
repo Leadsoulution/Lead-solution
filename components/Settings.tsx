@@ -1,5 +1,4 @@
 
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Power, PowerOff, CheckCircle, XCircle, Save, RefreshCw, ChevronDown } from 'lucide-react';
 import { Statut, Ramassage, Livraison, Remboursement, CommandeRetour, ColorCategory, MessageCategory, AllMessageTemplates } from '../types';
@@ -177,7 +176,7 @@ const MessageSettingsSection: React.FC<{
                               ))}
                             </div>
                             <textarea
-                                ref={el => textareaRefs.current[status] = el}
+                                ref={(el) => { textareaRefs.current[status] = el; }}
                                 value={messageConfig.template}
                                 onChange={(e) => handleTemplateChange(status, e.target.value)}
                                 rows={4}
@@ -195,30 +194,10 @@ const MessageSettingsSection: React.FC<{
 
 
 const Settings: React.FC = () => {
-  const [isShopifyConnected, setIsShopifyConnected] = useState(false);
-  const [isWooConnected, setIsWooConnected] = useState(false);
   const { saveColors, resetColors, saveMessageTemplates, resetMessageTemplates, currency, setCurrency } = useCustomization();
 
   const [showSaveConfirmation, setShowSaveConfirmation] = useState(false);
   const [showColorSaveConfirmation, setShowColorSaveConfirmation] = useState(false);
-
-
-  React.useEffect(() => {
-    setIsShopifyConnected(localStorage.getItem('shopifyConnected') === 'true');
-    setIsWooConnected(localStorage.getItem('wooConnected') === 'true');
-  }, []);
-
-  const toggleConnection = (platform: 'shopify' | 'woo') => {
-    if (platform === 'shopify') {
-      const newState = !isShopifyConnected;
-      setIsShopifyConnected(newState);
-      localStorage.setItem('shopifyConnected', String(newState));
-    } else {
-      const newState = !isWooConnected;
-      setIsWooConnected(newState);
-      localStorage.setItem('wooConnected', String(newState));
-    }
-  };
 
   const handleSaveTemplates = () => {
     saveMessageTemplates();
@@ -231,67 +210,14 @@ const Settings: React.FC = () => {
     setShowColorSaveConfirmation(true);
     setTimeout(() => setShowColorSaveConfirmation(false), 2000);
   }
-
-  const PlatformCard: React.FC<{
-    name: string;
-    description: string;
-    isConnected: boolean;
-    onToggle: () => void;
-    logo: string;
-  }> = ({ name, description, isConnected, onToggle, logo }) => (
-    <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground flex flex-col md:flex-row items-center justify-between">
-      <div className="flex items-center gap-4">
-        <img src={logo} alt={`${name} logo`} className="h-12 w-12" />
-        <div>
-          <h3 className="text-xl font-semibold">{name}</h3>
-          <p className="text-muted-foreground dark:text-dark-muted-foreground">{description}</p>
-        </div>
-      </div>
-      <div className="flex items-center gap-4 mt-4 md:mt-0">
-        <div className={`flex items-center gap-2 px-3 py-1 rounded-full text-sm ${isConnected ? 'bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300' : 'bg-red-100 text-red-800 dark:bg-red-900/50 dark:text-red-300'}`}>
-          {isConnected ? <CheckCircle size={16} /> : <XCircle size={16} />}
-          <span>{isConnected ? 'Connected' : 'Disconnected'}</span>
-        </div>
-        <button
-          onClick={onToggle}
-          className={`px-4 py-2 rounded-md flex items-center gap-2 font-semibold text-white ${
-            isConnected
-              ? 'bg-red-500 hover:bg-red-600'
-              : 'bg-blue-500 hover:bg-blue-600'
-          }`}
-        >
-          {isConnected ? <PowerOff size={16} /> : <Power size={16} />}
-          {isConnected ? 'Disconnect' : 'Connect'}
-        </button>
-      </div>
-    </div>
-  );
   
   return (
     <div className="space-y-8 max-w-4xl mx-auto">
       <div>
           <h1 className="text-3xl font-bold">Settings</h1>
-          <p className="text-muted-foreground">Gérez vos connexions, personnalisez les messages et les couleurs.</p>
+          <p className="text-muted-foreground">Personnalisez les messages et les couleurs de l'application.</p>
       </div>
       
-      <div className="space-y-4">
-        <h2 className="text-2xl font-semibold border-b pb-2">Connexions</h2>
-        <PlatformCard
-          name="Shopify"
-          description="Connect your Shopify store to sync orders."
-          isConnected={isShopifyConnected}
-          onToggle={() => toggleConnection('shopify')}
-          logo="https://cdn.worldvectorlogo.com/logos/shopify.svg"
-        />
-        <PlatformCard
-          name="WooCommerce"
-          description="Connect your WordPress store to sync orders."
-          isConnected={isWooConnected}
-          onToggle={() => toggleConnection('woo')}
-          logo="https://cdn.worldvectorlogo.com/logos/woocommerce-logo.svg"
-        />
-      </div>
-
        <div className="space-y-4">
         <h2 className="text-2xl font-semibold border-b pb-2">Devise</h2>
         <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">

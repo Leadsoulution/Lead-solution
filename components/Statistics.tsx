@@ -1,3 +1,4 @@
+
 import React, { useMemo, useState } from 'react';
 import { Order, Statut, Livraison, CommandeRetour } from '../types';
 import {
@@ -244,7 +245,7 @@ const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
     return aggregated.map(({ name, sales }) => ({ name, sales }));
   }, [confirmedOrders, salesTimeFilter, salesProductFilter]);
   
-  const categoryData = useMemo(() => {
+  const categoryData = useMemo<{ name: string; value: number; percentage: string }[]>(() => {
     const salesByProduct = confirmedOrders.reduce((acc, order) => {
       if (!acc[order.product]) {
         acc[order.product] = 0;
@@ -254,7 +255,7 @@ const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
     // FIX: Explicitly typing the initial value of reduce ensures that salesByProduct is correctly inferred as Record<string, number>.
     }, {} as Record<string, number>);
 
-    const totalSales = Object.values(salesByProduct).reduce((sum, val) => sum + val, 0);
+    const totalSales = (Object.values(salesByProduct) as number[]).reduce((sum: number, val: number) => sum + val, 0);
 
     return Object.entries(salesByProduct)
       .map(([name, value]) => ({ name, value, percentage: totalSales > 0 ? ((value / totalSales) * 100).toFixed(0) : '0' }))
@@ -262,7 +263,7 @@ const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
       .slice(0, 6);
   }, [confirmedOrders]);
 
-  const avgCheckData = useMemo(() => {
+  const avgCheckData = useMemo<{ name: string; value: number }[]>(() => {
     const checkByProduct: Record<string, { total: number; count: number }> = {};
     confirmedOrders.forEach(order => {
         if (!checkByProduct[order.product]) checkByProduct[order.product] = { total: 0, count: 0 };
@@ -271,12 +272,17 @@ const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
     });
     
     return Object.entries(checkByProduct)
-        .map(([name, data]) => ({ name, value: data.total / data.count }))
+        .map(([name, data]: [string, { total: number; count: number }]) => ({ name, value: data.total / data.count }))
         .sort((a, b) => b.value - a.value)
         .slice(0, 6);
   }, [confirmedOrders]);
 
-  const deliveryTimeData = [
+  const maxCheckValue = useMemo(() => {
+    const values = avgCheckData.map(d => d.value);
+    return values.length > 0 ? Math.max(...values) : 1;
+  }, [avgCheckData]);
+
+  const deliveryTimeData: { name: string; days: number }[] = [
     { name: 'Alabama', days: 12 }, { name: 'Florida', days: 8 }, { name: 'Missouri', days: 6 },
     { name: 'California', days: 5 }, { name: 'New York', days: 2 }
   ];
@@ -438,14 +444,14 @@ const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
         <div className="p-6 rounded-2xl border bg-card text-card-foreground shadow-sm dark:bg-dark-card dark:text-dark-card-foreground">
           <h3 className="text-lg font-semibold mb-4">Av. Check</h3>
           <div className="space-y-3 pt-2">
-            {avgCheckData.map((entry, index) => (
+            {avgCheckData.map((entry: { name: string; value: number }, index: number) => (
                 <div key={entry.name} className="flex flex-col">
                     <div className="flex justify-between text-sm mb-1">
                         <span className="font-medium">{entry.name}</span>
                         <span className="font-semibold">{formatCurrency(entry.value)}</span>
                     </div>
                     <div className="w-full bg-secondary dark:bg-dark-secondary rounded-full h-2.5">
-                        <div className="h-2.5 rounded-full" style={{ width: `${(entry.value / Math.max(...avgCheckData.map(d => d.value)))*100}%`, backgroundColor: `rgba(59, 130, 246, ${1 - index*0.15})` }}></div>
+                        <div className="h-2.5 rounded-full" style={{ width: `${(entry.value / maxCheckValue)*100}%`, backgroundColor: `rgba(59, 130, 246, ${1 - index*0.15})` }}></div>
                     </div>
                 </div>
             ))}
@@ -454,7 +460,7 @@ const Statistics: React.FC<StatisticsProps> = ({ orders }) => {
         <div className="p-6 rounded-2xl border bg-card text-card-foreground shadow-sm dark:bg-dark-card dark:text-dark-card-foreground">
           <h3 className="text-lg font-semibold mb-4">Av. Delivery Time</h3>
           <div className="space-y-3 pt-2">
-            {deliveryTimeData.map(entry => {
+            {deliveryTimeData.map((entry: { name: string; days: number }) => {
                 let color = '#4ade80'; if (entry.days > 5) color = '#facc15'; if (entry.days > 8) color = '#f87171';
                 return (
                     <div key={entry.name} className="flex flex-col">

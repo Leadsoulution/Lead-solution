@@ -1,6 +1,8 @@
+
 import React, { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Package2, LogIn } from 'lucide-react';
+import { LogIn } from 'lucide-react';
+import Logo from './Logo';
 
 const Login: React.FC = () => {
   const [username, setUsername] = useState('');
@@ -22,8 +24,8 @@ const Login: React.FC = () => {
       <div className="w-full max-w-md p-8 space-y-8 bg-card dark:bg-dark-card rounded-xl shadow-lg">
         <div className="text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
-              <Package2 className="h-8 w-8 text-blue-500" />
-              <h1 className="text-3xl font-bold text-card-foreground dark:text-dark-card-foreground">OrderSync</h1>
+              <Logo className="h-12 w-12" />
+              <h1 className="text-3xl font-bold text-card-foreground dark:text-dark-card-foreground">Orderly</h1>
             </div>
           <h2 className="text-xl text-muted-foreground dark:text-dark-muted-foreground">Welcome back! Please log in.</h2>
         </div>

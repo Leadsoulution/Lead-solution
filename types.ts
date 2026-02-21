@@ -92,6 +92,7 @@ export enum View {
     Integrations = 'Integrations',
     Clients = 'Clients',
     Financials = 'Financials',
+    AIAnalysis = 'AIAnalysis',
 }
 
 export interface StatCardProps {

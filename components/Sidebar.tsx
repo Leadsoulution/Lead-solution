@@ -1,8 +1,10 @@
+
 import React from 'react';
 import { View, Role } from '../types';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark, BrainCircuit } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import Logo from './Logo';
 
 interface SidebarProps {
   currentView: View;
@@ -23,6 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
     { view: View.Orders, icon: <ShoppingCart className="h-5 w-5" />, label: 'Orders' },
     { view: View.Clients, icon: <Users className="h-5 w-5" />, label: 'Clients' },
     { view: View.Statistics, icon: <BarChart3 className="h-5 w-5" />, label: 'Statistiques' },
+    { view: View.AIAnalysis, icon: <BrainCircuit className="h-5 w-5" />, label: 'AI Analysis' },
     { view: View.Settings, icon: <Settings className="h-5 w-5" />, label: 'Settings' },
   ].filter(item => {
     if (isConfirmationUser) {
@@ -53,8 +56,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
 
       <div className={`flex h-14 items-center border-b px-4 lg:h-[60px] lg:px-6 ${isCollapsed ? 'justify-center' : ''}`}>
         <a href="/" className="flex items-center gap-2 font-semibold">
-          <Package2 className="h-6 w-6" />
-          {!isCollapsed && <span className="">OrderSync</span>}
+          <Logo className="h-8 w-8" />
+          {!isCollapsed && <span className="">Orderly</span>}
         </a>
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
