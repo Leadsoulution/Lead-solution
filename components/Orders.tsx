@@ -316,12 +316,12 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     product: productName,
                     noteClient: values[idx.note] || '',
                     platform: Platform.Manual,
-                    statut: Statut.PasDeReponse,
+                    statut: Statut.NonDefini,
                     assignedUserId: null,
-                    ramassage: Ramassage.NonRamasser,
-                    livraison: Livraison.PasDeReponse,
-                    remboursement: Remboursement.NonPayer,
-                    commandeRetour: CommandeRetour.NonRetourne,
+                    ramassage: Ramassage.NonDefini,
+                    livraison: Livraison.NonDefini,
+                    remboursement: Remboursement.NonDefini,
+                    commandeRetour: CommandeRetour.NonDefini,
                     callCount: 0,
                 };
             }).filter(o => o !== null) as Order[];

@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useCallback } from 'react';
 import { Order, Statut, Livraison, Product, CommandeRetour } from '../types';
-import { Trash2, PlusCircle, Archive, Edit, Save, X } from 'lucide-react';
+import { Trash2, PlusCircle, Archive, Edit, Save, X, Plus } from 'lucide-react';
 import AddProductModal from './AddProductModal';
 import { useCustomization } from '../contexts/CustomizationContext';
 
@@ -10,12 +10,103 @@ interface ProductsProps {
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
 }
 
+interface Column {
+  id: string;
+  label: string;
+  width: number;
+  minWidth: number;
+  isCustom: boolean;
+  field?: keyof Product | 'stockReel' | 'stockDisponible' | 'priceRemise';
+}
+
 const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const { formatCurrency } = useCustomization();
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editedProductData, setEditedProductData] = useState<Partial<Product>>({});
+
+  // Column Management
+  const [columns, setColumns] = useState<Column[]>([
+    { id: 'imageUrl', label: 'Photo', width: 80, minWidth: 60, isCustom: false, field: 'imageUrl' },
+    { id: 'id', label: 'Code Article', width: 120, minWidth: 100, isCustom: false, field: 'id' },
+    { id: 'name', label: 'Nom du Produit', width: 200, minWidth: 150, isCustom: false, field: 'name' },
+    { id: 'initialStock', label: 'Stock Initial', width: 100, minWidth: 80, isCustom: false, field: 'initialStock' },
+    { id: 'stockReel', label: 'Stock Réel', width: 100, minWidth: 80, isCustom: false, field: 'stockReel' },
+    { id: 'stockDisponible', label: 'Stock Virtuel', width: 100, minWidth: 80, isCustom: false, field: 'stockDisponible' },
+    { id: 'purchasePrice', label: "Prix d'Achat", width: 100, minWidth: 80, isCustom: false, field: 'purchasePrice' },
+    { id: 'sellingPrice', label: "Prix de Vente", width: 100, minWidth: 80, isCustom: false, field: 'sellingPrice' },
+    { id: 'discount', label: 'Remise (%)', width: 100, minWidth: 80, isCustom: false, field: 'discount' },
+    { id: 'priceRemise', label: 'Prix Remisé', width: 100, minWidth: 80, isCustom: false, field: 'priceRemise' },
+    { id: 'showInOrders', label: 'Afficher', width: 80, minWidth: 60, isCustom: false, field: 'showInOrders' },
+    { id: 'actions', label: 'Actions', width: 100, minWidth: 80, isCustom: false },
+  ]);
+
+  const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
+  const [newColumnName, setNewColumnName] = useState('');
+
+  const handleAddColumn = () => {
+    if (!newColumnName.trim()) return;
+    const newColId = `custom_${Date.now()}`;
+    setColumns(prev => [
+      ...prev.slice(0, prev.length - 1), // Insert before 'Actions'
+      { id: newColId, label: newColumnName, width: 150, minWidth: 100, isCustom: true },
+      prev[prev.length - 1]
+    ]);
+    setNewColumnName('');
+    setIsAddColumnModalOpen(false);
+  };
+
+  // Column Resizing Logic
+  const activeResizeRef = useRef<{ index: number; startX: number; startWidth: number } | null>(null);
+
+  const handleResizeStart = (e: React.MouseEvent, index: number) => {
+    e.preventDefault();
+    e.stopPropagation();
+    activeResizeRef.current = {
+      index,
+      startX: e.clientX,
+      startWidth: columns[index].width,
+    };
+    document.addEventListener('mousemove', handleResizeMove);
+    document.addEventListener('mouseup', handleResizeEnd);
+  };
+
+  const handleResizeMove = useCallback((e: MouseEvent) => {
+    if (!activeResizeRef.current) return;
+    const { index, startX, startWidth } = activeResizeRef.current;
+    const diff = e.clientX - startX;
+    const newWidth = Math.max(columns[index].minWidth, startWidth + diff);
+
+    setColumns(prev => {
+      const next = [...prev];
+      next[index] = { ...next[index], width: newWidth };
+      return next;
+    });
+  }, [columns]);
+
+  const handleResizeEnd = useCallback(() => {
+    activeResizeRef.current = null;
+    document.removeEventListener('mousemove', handleResizeMove);
+    document.removeEventListener('mouseup', handleResizeEnd);
+  }, [handleResizeMove]);
+
+  const handleUpdateCustomField = (productId: string, fieldId: string, value: string) => {
+    setProducts(prevProducts => 
+        prevProducts.map(product => {
+            if (product.id === productId) {
+                return {
+                    ...product,
+                    customFields: {
+                        ...(product.customFields || {}),
+                        [fieldId]: value
+                    }
+                };
+            }
+            return product;
+        })
+    );
+  };
 
   React.useEffect(() => {
     if (notification) {
@@ -112,7 +203,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     const headers = [
       'Code Article', 'Nom du Produit', 'URL de l\'image', 'Stock Initial', 'Prix d\'Achat', 'Prix de Vente',
       'Remise (%)',
-      'Stock Réel', 'Stock Disponible'
+      'Stock Réel', 'Stock Virtuel'
     ];
 
     const escapeCSV = (val: any): string => {
@@ -147,6 +238,83 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
     setNotification({ type: 'success', message: `${productsWithStock.length} produits exportés avec succès.` });
+  };
+
+  const renderCell = (product: Product & { stockReel: number; stockDisponible: number }, col: Column) => {
+    const isEditing = editingProductId === product.id;
+    const inputClass = "w-full p-1 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-sm";
+    const inputNumberClass = `${inputClass} text-right`;
+
+    if (col.isCustom) {
+        return (
+            <input
+                type="text"
+                value={product.customFields?.[col.id] || ''}
+                onChange={(e) => handleUpdateCustomField(product.id, col.id, e.target.value)}
+                className={inputClass}
+            />
+        );
+    }
+
+    switch (col.field) {
+        case 'imageUrl':
+            return (
+                <div className="h-10 w-10 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden flex items-center justify-center">
+                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                </div>
+            );
+        case 'id': return <span className="font-mono text-xs">{product.id}</span>;
+        case 'name':
+            return isEditing ? <input type="text" name="name" value={editedProductData.name || ''} onChange={handleEditInputChange} className={inputClass} /> : <span className="font-medium">{product.name}</span>;
+        case 'initialStock':
+            return isEditing ? <input type="number" name="initialStock" value={editedProductData.initialStock || 0} onChange={handleEditInputChange} className={inputNumberClass} /> : product.initialStock;
+        case 'stockReel': return product.stockReel;
+        case 'stockDisponible':
+             return <span className={`font-semibold ${product.stockDisponible > 10 ? 'text-green-600 dark:text-green-400' : 'text-orange-500 dark:text-orange-400'}`}>{product.stockDisponible}</span>;
+        case 'purchasePrice':
+            return isEditing ? <input type="number" name="purchasePrice" value={editedProductData.purchasePrice || 0} onChange={handleEditInputChange} className={inputNumberClass} /> : formatCurrency(product.purchasePrice);
+        case 'sellingPrice':
+            return isEditing ? <input type="number" name="sellingPrice" value={editedProductData.sellingPrice || 0} onChange={handleEditInputChange} className={inputNumberClass} /> : formatCurrency(product.sellingPrice);
+        case 'discount':
+            return isEditing ? <input type="number" name="discount" value={editedProductData.discount || 0} onChange={handleEditInputChange} className={inputNumberClass} /> : `${product.discount || 0}%`;
+        case 'priceRemise':
+             const discountedPrice = product.sellingPrice * (1 - (product.discount || 0) / 100);
+             return <span className="font-medium text-green-600 dark:text-green-400">{formatCurrency(discountedPrice)}</span>;
+        case 'showInOrders':
+             return (
+                <button
+                    onClick={() => handleToggleShowInOrders(product.id)}
+                    className={`p-1 rounded-full ${product.showInOrders !== false ? 'text-green-500 bg-green-100 dark:bg-green-900/30' : 'text-gray-400 bg-gray-100 dark:bg-gray-800'}`}
+                >
+                    {product.showInOrders !== false ? <Archive size={16} /> : <X size={16} />}
+                </button>
+             );
+        case 'actions':
+             return (
+                <div className="flex items-center justify-center gap-2">
+                    {isEditing ? (
+                        <>
+                            <button onClick={handleSaveEdit} className="p-1 text-green-600 hover:bg-green-100 rounded">
+                                <Save size={16} />
+                            </button>
+                            <button onClick={handleCancelEdit} className="p-1 text-gray-600 hover:bg-gray-100 rounded">
+                                <X size={16} />
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <button onClick={() => handleEditClick(product)} className="p-1 text-blue-600 hover:bg-blue-100 rounded">
+                                <Edit size={16} />
+                            </button>
+                            <button onClick={() => handleDeleteProduct(product.id)} className="p-1 text-red-600 hover:bg-red-100 rounded">
+                                <Trash2 size={16} />
+                            </button>
+                        </>
+                    )}
+                </div>
+             );
+        default: return null;
+    }
   };
 
   const inputClass = "w-full p-1 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-sm";
@@ -189,7 +357,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
                 <th className="px-2 py-3">Nom du Produit</th>
                 <th className="px-2 py-3 text-right">Stock Initial</th>
                 <th className="px-2 py-3 text-right">Stock Réel</th>
-                <th className="px-2 py-3 text-right">Stock Disponible</th>
+                <th className="px-2 py-3 text-right">Stock Virtuel</th>
                 <th className="px-2 py-3 text-right">Prix d'Achat</th>
                 <th className="px-2 py-3 text-right">Prix de Vente</th>
                 <th className="px-2 py-3 text-right">Remise (%)</th>

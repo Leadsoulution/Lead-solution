@@ -61,6 +61,7 @@ export interface Order {
   commandeRetour: CommandeRetour;
   platform: Platform;
   callCount: number;
+  customFields?: Record<string, string>;
 }
 
 export interface Product {
@@ -73,6 +74,7 @@ export interface Product {
   showInOrders?: boolean;
   discount?: number;
   category?: string;
+  customFields?: Record<string, string>;
 }
 
 export interface Client {

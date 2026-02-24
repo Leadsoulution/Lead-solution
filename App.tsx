@@ -159,13 +159,13 @@ const DashboardLayout: React.FC = () => {
             product: matchedProduct ? matchedProduct.name : raw.fallbackProduct,
             // Use local price if matched to ensure consistency, otherwise external price
             price: matchedProduct ? matchedProduct.sellingPrice : raw.price,
-            statut: Statut.PasDeReponse,
+            statut: Statut.NonDefini,
             assignedUserId: null,
             noteClient: 'Imported from WooCommerce (SKU Match)',
-            ramassage: Ramassage.NonRamasser,
-            livraison: Livraison.PasDeReponse,
-            remboursement: Remboursement.NonPayer,
-            commandeRetour: CommandeRetour.NonRetourne,
+            ramassage: Ramassage.NonDefini,
+            livraison: Livraison.NonDefini,
+            remboursement: Remboursement.NonDefini,
+            commandeRetour: CommandeRetour.NonDefini,
             platform: Platform.WooCommerce,
             callCount: 0,
           };
@@ -209,39 +209,139 @@ const DashboardLayout: React.FC = () => {
     }
   }, [orders]);
 
-  const handleSyncOrders = async () => {
-    setIsLoading(true);
-    // Simulate network delay
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    if (integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected) {
-        // Simulate finding a new order
-        const randomProduct = products[Math.floor(Math.random() * products.length)];
-        const newLiveOrder: Order = {
-            id: `LIVE-SYNC-${Date.now().toString().slice(-6)}`,
-            date: new Date().toISOString(),
-            customerName: `Client Web ${Math.floor(Math.random() * 100)}`,
-            customerPhone: `2126${Math.floor(Math.random() * 100000000)}`,
-            address: `${Math.floor(Math.random() * 200)} Bd Mohammed V, Casablanca`,
-            product: randomProduct ? randomProduct.name : 'Produit Importé',
-            price: randomProduct ? randomProduct.sellingPrice : 299,
-            statut: Statut.PasDeReponse,
-            assignedUserId: null,
-            noteClient: 'Commande synchronisée depuis le site',
-            ramassage: Ramassage.NonRamasser,
-            livraison: Livraison.PasDeReponse,
-            remboursement: Remboursement.NonPayer,
-            commandeRetour: CommandeRetour.NonRetourne,
-            platform: integrations.WooCommerce.isConnected ? Platform.WooCommerce : (integrations.Shopify.isConnected ? Platform.Shopify : Platform.YouCan),
-            callCount: 0,
-        };
+  const fetchWooCommerceOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
+    try {
+        // Remove trailing slash if present
+        const baseUrl = settings.storeUrl.replace(/\/$/, '');
+        const auth = btoa(`${settings.apiKey}:${settings.apiSecret}`);
         
-        setOrders(prev => [newLiveOrder, ...prev]);
-    } else {
-        alert("Veuillez d'abord connecter une boutique dans l'onglet Intégrations.");
+        const response = await fetch(`${baseUrl}/wp-json/wc/v3/orders?per_page=20`, {
+            headers: {
+                'Authorization': `Basic ${auth}`
+            }
+        });
+        
+        if (!response.ok) {
+            if (response.status === 0 || response.status === 401 || response.status === 403) {
+                 throw new Error("Erreur de connexion (CORS ou Auth). Vérifiez vos identifiants et les permissions CORS de votre serveur.");
+            }
+            throw new Error(`Erreur API WooCommerce: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!Array.isArray(data)) {
+            throw new Error("Format de réponse invalide de WooCommerce.");
+        }
+
+        return data.map((wcOrder: any) => ({
+            id: String(wcOrder.id),
+            date: wcOrder.date_created,
+            customerName: `${wcOrder.billing.first_name} ${wcOrder.billing.last_name}`.trim(),
+            customerPhone: wcOrder.billing.phone || '',
+            address: [wcOrder.billing.address_1, wcOrder.billing.city].filter(Boolean).join(', '),
+            product: wcOrder.line_items?.[0]?.name || 'Produit Inconnu',
+            price: parseFloat(wcOrder.total),
+            statut: Statut.NonDefini, // Default status for new imports
+            assignedUserId: null,
+            noteClient: wcOrder.customer_note || '',
+            ramassage: Ramassage.NonDefini,
+            livraison: Livraison.NonDefini,
+            remboursement: Remboursement.NonDefini,
+            commandeRetour: CommandeRetour.NonDefini,
+            platform: Platform.WooCommerce,
+            callCount: 0,
+        }));
+    } catch (error: any) {
+        console.error("WooCommerce Sync Error:", error);
+        throw error;
     }
-    setIsLoading(false);
   };
+
+  const handleSyncOrders = async (silent: boolean = false) => {
+    if (!silent) {
+        setIsLoading(true);
+    }
+    
+    let newOrdersCount = 0;
+    let errors: string[] = [];
+
+    // 1. WooCommerce Sync
+    if (integrations.WooCommerce.isConnected) {
+        try {
+            const wcOrders = await fetchWooCommerceOrders(integrations.WooCommerce);
+            setOrders(prev => {
+                const existingIds = new Set(prev.map(o => o.id));
+                const uniqueNewOrders = wcOrders.filter(o => !existingIds.has(o.id));
+                newOrdersCount += uniqueNewOrders.length;
+                return [...uniqueNewOrders, ...prev];
+            });
+        } catch (e: any) {
+            errors.push(`WooCommerce: ${e.message}`);
+        }
+    }
+
+    // 2. Simulation / Demo Fallback (if no real sync happened and no errors, or explicit demo request)
+    const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected;
+    
+    if (!silent) {
+        // If we tried to sync but failed, show error.
+        if (errors.length > 0) {
+            alert(`Erreur de synchronisation:\n${errors.join('\n')}\n\nNote: Si vous testez en local ou sans proxy, CORS peut bloquer la requête.`);
+        } 
+        // If connected but no real orders found (and no error), we might want to simulate for demo purposes IF the user wants
+        else if (isAnyConnected && newOrdersCount === 0) {
+             // Check if we should simulate (only if it's likely a demo/test)
+             // For now, let's just alert that no *new* orders were found from the API.
+             alert("Synchronisation terminée. Aucune nouvelle commande trouvée sur la boutique connectée.");
+        }
+        else if (newOrdersCount > 0) {
+            alert(`${newOrdersCount} nouvelles commandes synchronisées avec succès !`);
+        }
+        else if (!isAnyConnected) {
+            // Offer demo mode if no store is connected
+            if (window.confirm("Aucune boutique n'est connectée. Voulez-vous simuler une synchronisation pour tester ?")) {
+                 const randomProduct = products[Math.floor(Math.random() * products.length)];
+                 const newLiveOrder: Order = {
+                    id: `DEMO-SYNC-${Date.now().toString().slice(-6)}`,
+                    date: new Date().toISOString(),
+                    customerName: `Client Démo ${Math.floor(Math.random() * 100)}`,
+                    customerPhone: `2126${Math.floor(Math.random() * 100000000)}`,
+                    address: `Adresse Démo, Casablanca`,
+                    product: randomProduct ? randomProduct.name : 'Produit Démo',
+                    price: randomProduct ? randomProduct.sellingPrice : 199,
+                    statut: Statut.NonDefini,
+                    assignedUserId: null,
+                    noteClient: 'Commande de démonstration',
+                    ramassage: Ramassage.NonDefini,
+                    livraison: Livraison.NonDefini,
+                    remboursement: Remboursement.NonDefini,
+                    commandeRetour: CommandeRetour.NonDefini,
+                    platform: Platform.Manual,
+                    callCount: 0,
+                };
+                setOrders(prev => [newLiveOrder, ...prev]);
+                alert("Commande de démonstration ajoutée ! Pour une vraie synchronisation, configurez vos boutiques dans l'onglet Intégrations.");
+            } else {
+                setView(View.Integrations);
+            }
+        }
+        setIsLoading(false);
+    }
+  };
+
+  // Automatic Polling
+  useEffect(() => {
+    const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected;
+    
+    if (isAnyConnected) {
+        const intervalId = setInterval(() => {
+            handleSyncOrders(true); // Silent sync
+        }, 10000); // Poll every 10 seconds
+
+        return () => clearInterval(intervalId);
+    }
+  }, [integrations]);
 
 
   const renderView = () => {

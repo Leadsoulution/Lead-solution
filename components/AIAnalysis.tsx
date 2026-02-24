@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Order, Product, Client } from '../types';
-import { BrainCircuit, Sparkles, AlertTriangle, RefreshCw, Send, User, Bot } from 'lucide-react';
+import { BrainCircuit, Sparkles, AlertTriangle, RefreshCw, Send, User, Bot, Settings, Save } from 'lucide-react';
 
 interface AIAnalysisProps {
   orders: Order[];
@@ -19,6 +19,11 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  
+  const [userApiKey, setUserApiKey] = useState<string>(() => {
+    return localStorage.getItem('user_gemini_api_key') || '';
+  });
+  const [showSettings, setShowSettings] = useState(false);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -27,6 +32,12 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
+
+  const handleSaveApiKey = () => {
+    localStorage.setItem('user_gemini_api_key', userApiKey);
+    setShowSettings(false);
+    setError(null); // Clear any previous auth errors
+  };
 
   const getSystemContext = () => {
     const totalRevenue = orders.reduce((sum, order) => sum + order.price, 0);
@@ -55,9 +66,10 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
   };
 
   const callGemini = async (userMessage: string, history: Message[]) => {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+    
     if (!apiKey) {
-      throw new Error("API Key is missing. Please check your environment variables.");
+      throw new Error("API Key is missing. Please configure it in the settings icon above.");
     }
 
     const systemContext = getSystemContext();
@@ -162,13 +174,46 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
   return (
     <div className="flex flex-col h-[calc(100vh-100px)] max-w-5xl mx-auto p-4 gap-4">
       <div className="flex flex-col gap-2 flex-shrink-0">
-        <h1 className="text-3xl font-bold flex items-center gap-3">
-          <BrainCircuit className="text-purple-600" size={32} />
-          AI Business Analysis & Chat
-        </h1>
+        <div className="flex justify-between items-start">
+            <h1 className="text-3xl font-bold flex items-center gap-3">
+            <BrainCircuit className="text-purple-600" size={32} />
+            AI Business Analysis & Chat
+            </h1>
+            <button 
+                onClick={() => setShowSettings(!showSettings)}
+                className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                title="API Settings"
+            >
+                <Settings size={20} />
+            </button>
+        </div>
         <p className="text-muted-foreground">
           Chat with your data. Get insights, ask questions, and refine your strategy with Orderly AI.
         </p>
+        
+        {showSettings && (
+            <div className="p-4 bg-card border rounded-lg shadow-sm mb-2 animate-in slide-in-from-top-2">
+                <label className="block text-sm font-medium mb-1">Gemini API Key</label>
+                <div className="flex gap-2">
+                    <input 
+                        type="password" 
+                        value={userApiKey}
+                        onChange={(e) => setUserApiKey(e.target.value)}
+                        placeholder="Enter your Gemini API Key"
+                        className="flex-1 p-2 border rounded-md bg-transparent text-sm"
+                    />
+                    <button 
+                        onClick={handleSaveApiKey}
+                        className="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 flex items-center gap-2 text-sm"
+                    >
+                        <Save size={16} /> Save
+                    </button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                    Leave empty to use the default system key. Your key is stored locally in your browser.
+                </p>
+            </div>
+        )}
       </div>
 
       {messages.length === 0 && !isLoading && (
