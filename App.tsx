@@ -211,21 +211,21 @@ const DashboardLayout: React.FC = () => {
 
   const fetchWooCommerceOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
     try {
-        // Remove trailing slash if present
-        const baseUrl = settings.storeUrl.replace(/\/$/, '');
-        const auth = btoa(`${settings.apiKey}:${settings.apiSecret}`);
-        
-        const response = await fetch(`${baseUrl}/wp-json/wc/v3/orders?per_page=20`, {
+        const response = await fetch('/api/proxy/woocommerce', {
+            method: 'POST',
             headers: {
-                'Authorization': `Basic ${auth}`
-            }
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                storeUrl: settings.storeUrl,
+                apiKey: settings.apiKey,
+                apiSecret: settings.apiSecret
+            })
         });
         
         if (!response.ok) {
-            if (response.status === 0 || response.status === 401 || response.status === 403) {
-                 throw new Error("Erreur de connexion (CORS ou Auth). Vérifiez vos identifiants et les permissions CORS de votre serveur.");
-            }
-            throw new Error(`Erreur API WooCommerce: ${response.status} ${response.statusText}`);
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Erreur API WooCommerce: ${response.statusText}`);
         }
         
         const data = await response.json();
@@ -258,6 +258,100 @@ const DashboardLayout: React.FC = () => {
     }
   };
 
+  const fetchShopifyOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
+    try {
+        const response = await fetch('/api/proxy/shopify', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                storeUrl: settings.storeUrl,
+                apiKey: settings.apiKey,
+                apiSecret: settings.apiSecret
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Erreur API Shopify: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        if (!data.orders || !Array.isArray(data.orders)) {
+            throw new Error("Format de réponse invalide de Shopify.");
+        }
+
+        return data.orders.map((order: any) => ({
+            id: String(order.id),
+            date: order.created_at,
+            customerName: `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim() || 'Client Inconnu',
+            customerPhone: order.shipping_address?.phone || order.customer?.phone || '',
+            address: [order.shipping_address?.address1, order.shipping_address?.city].filter(Boolean).join(', '),
+            product: order.line_items?.[0]?.name || 'Produit Inconnu',
+            price: parseFloat(order.total_price),
+            statut: Statut.NonDefini,
+            assignedUserId: null,
+            noteClient: order.note || '',
+            ramassage: Ramassage.NonDefini,
+            livraison: Livraison.NonDefini,
+            remboursement: Remboursement.NonDefini,
+            commandeRetour: CommandeRetour.NonDefini,
+            platform: Platform.Shopify,
+            callCount: 0,
+        }));
+    } catch (error: any) {
+        console.error("Shopify Sync Error:", error);
+        throw error;
+    }
+  };
+
+  const fetchYouCanOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
+    try {
+        const response = await fetch('/api/proxy/youcan', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                storeUrl: settings.storeUrl,
+                apiKey: settings.apiKey
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Erreur API YouCan: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const ordersList = Array.isArray(data) ? data : (data.data && Array.isArray(data.data) ? data.data : []);
+
+        return ordersList.map((order: any) => ({
+            id: String(order.id),
+            date: order.created_at,
+            customerName: `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim() || 'Client Inconnu',
+            customerPhone: order.customer?.phone || '',
+            address: order.shipping_address?.address1 || '',
+            product: order.items?.[0]?.name || 'Produit Inconnu',
+            price: parseFloat(order.total),
+            statut: Statut.NonDefini,
+            assignedUserId: null,
+            noteClient: order.note || '',
+            ramassage: Ramassage.NonDefini,
+            livraison: Livraison.NonDefini,
+            remboursement: Remboursement.NonDefini,
+            commandeRetour: CommandeRetour.NonDefini,
+            platform: Platform.YouCan,
+            callCount: 0,
+        }));
+    } catch (error: any) {
+        console.error("YouCan Sync Error:", error);
+        throw error;
+    }
+  };
+
   const handleSyncOrders = async (silent: boolean = false) => {
     if (!silent) {
         setIsLoading(true);
@@ -278,6 +372,36 @@ const DashboardLayout: React.FC = () => {
             });
         } catch (e: any) {
             errors.push(`WooCommerce: ${e.message}`);
+        }
+    }
+
+    // 2. Shopify Sync
+    if (integrations.Shopify.isConnected) {
+        try {
+            const shopifyOrders = await fetchShopifyOrders(integrations.Shopify);
+            setOrders(prev => {
+                const existingIds = new Set(prev.map(o => o.id));
+                const uniqueNewOrders = shopifyOrders.filter(o => !existingIds.has(o.id));
+                newOrdersCount += uniqueNewOrders.length;
+                return [...uniqueNewOrders, ...prev];
+            });
+        } catch (e: any) {
+            errors.push(`Shopify: ${e.message}`);
+        }
+    }
+
+    // 3. YouCan Sync
+    if (integrations.YouCan.isConnected) {
+        try {
+            const youCanOrders = await fetchYouCanOrders(integrations.YouCan);
+            setOrders(prev => {
+                const existingIds = new Set(prev.map(o => o.id));
+                const uniqueNewOrders = youCanOrders.filter(o => !existingIds.has(o.id));
+                newOrdersCount += uniqueNewOrders.length;
+                return [...uniqueNewOrders, ...prev];
+            });
+        } catch (e: any) {
+            errors.push(`YouCan: ${e.message}`);
         }
     }
 

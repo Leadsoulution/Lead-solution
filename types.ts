@@ -4,6 +4,7 @@ export enum Platform {
   Shopify = 'Shopify',
   WooCommerce = 'WooCommerce',
   Manual = 'Manual',
+  YouCan = 'YouCan',
 }
 
 // Nouveaux enums pour les menus déroulants
