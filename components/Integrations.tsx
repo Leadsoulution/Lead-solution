@@ -19,12 +19,62 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
     setFormData(integrations[platform]);
   }, [integrations, platform]);
 
-  const handleConnect = () => {
-    // Basic validation
-    if (!formData.storeUrl || !formData.apiKey || !formData.apiSecret) {
-      alert("Veuillez remplir tous les champs : URL du magasin, clé API et secret API.");
-      return;
+  const getLabels = () => {
+    switch (platform) {
+      case PlatformIntegration.Shopify:
+        return { 
+          apiKey: 'Clé API (API Key)', 
+          apiSecret: 'Jeton d\'accès (Admin API Access Token)',
+          urlPlaceholder: 'https://ma-boutique.myshopify.com'
+        };
+      case PlatformIntegration.WooCommerce:
+        return { 
+          apiKey: 'Clé Client (Consumer Key)', 
+          apiSecret: 'Secret Client (Consumer Secret)',
+          urlPlaceholder: 'https://votre-site-wordpress.com'
+        };
+      case PlatformIntegration.YouCan:
+        return { 
+          apiKey: 'Jeton d\'accès (Access Token)', 
+          apiSecret: null, // Not needed for YouCan
+          urlPlaceholder: 'https://votre-boutique.youcan.shop'
+        };
+      case PlatformIntegration.GoogleSheets:
+        return {
+          apiKey: 'Email du compte de service (Client Email)',
+          apiSecret: 'Clé privée (Private Key)',
+          urlPlaceholder: 'ID de la feuille Google Sheets'
+        };
+      default:
+        return { 
+          apiKey: 'Clé API', 
+          apiSecret: 'Secret API',
+          urlPlaceholder: 'https://votreboutique.com'
+        };
     }
+  };
+
+  const labels = getLabels();
+
+  const handleConnect = () => {
+    if (platform === PlatformIntegration.GoogleSheets) {
+       if (!formData.spreadsheetId || !formData.clientEmail || !formData.privateKey) {
+         alert("Veuillez remplir tous les champs pour Google Sheets.");
+         return;
+       }
+    } else {
+      // Basic validation for other platforms
+      if (!formData.storeUrl || !formData.apiKey) {
+        alert("Veuillez remplir l'URL du magasin et la clé API.");
+        return;
+      }
+      // Require apiSecret for platforms other than YouCan
+      if (labels.apiSecret && !formData.apiSecret) {
+        alert("Veuillez remplir le champ Secret API.");
+        return;
+      }
+    }
+
     updateIntegration(platform, { ...formData, isConnected: true });
   };
 
@@ -38,7 +88,7 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
     setTimeout(() => setNotification(null), 2000);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
@@ -62,18 +112,41 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
       </div>
       
       <div className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1">URL du magasin</label>
-          <input type="text" name="storeUrl" value={settings.isConnected ? settings.storeUrl : formData.storeUrl} onChange={handleChange} placeholder="https://votreboutique.com" className="input-style" disabled={settings.isConnected} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Clé API</label>
-          <input type="password" name="apiKey" value={settings.isConnected ? maskedValue : formData.apiKey} onChange={handleChange} className="input-style" disabled={settings.isConnected} />
-        </div>
-        <div>
-          <label className="block text-sm font-medium mb-1">Secret API</label>
-          <input type="password" name="apiSecret" value={settings.isConnected ? maskedValue : formData.apiSecret} onChange={handleChange} className="input-style" disabled={settings.isConnected} />
-        </div>
+        {platform === PlatformIntegration.GoogleSheets ? (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1">ID de la feuille Google Sheets</label>
+              <input type="text" name="spreadsheetId" value={settings.isConnected ? settings.spreadsheetId : formData.spreadsheetId || ''} onChange={handleChange} placeholder="ex: 1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms" className="input-style" disabled={settings.isConnected} />
+              <p className="text-xs text-muted-foreground mt-1">L'ID se trouve dans l'URL de votre feuille Google.</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Email du compte de service</label>
+              <input type="text" name="clientEmail" value={settings.isConnected ? settings.clientEmail : formData.clientEmail || ''} onChange={handleChange} placeholder="ex: service-account@project.iam.gserviceaccount.com" className="input-style" disabled={settings.isConnected} />
+              <p className="text-xs text-muted-foreground mt-1">Partagez votre feuille avec cet email (accès éditeur).</p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Clé privée (Private Key)</label>
+              <textarea name="privateKey" value={settings.isConnected ? maskedValue : formData.privateKey || ''} onChange={handleChange} placeholder="-----BEGIN PRIVATE KEY-----..." className="input-style h-24 font-mono text-xs" disabled={settings.isConnected} />
+            </div>
+          </>
+        ) : (
+          <>
+            <div>
+              <label className="block text-sm font-medium mb-1">URL du magasin</label>
+              <input type="text" name="storeUrl" value={settings.isConnected ? settings.storeUrl : formData.storeUrl} onChange={handleChange} placeholder={labels.urlPlaceholder} className="input-style" disabled={settings.isConnected} />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">{labels.apiKey}</label>
+              <input type="password" name="apiKey" value={settings.isConnected ? maskedValue : formData.apiKey} onChange={handleChange} className="input-style" disabled={settings.isConnected} />
+            </div>
+            {labels.apiSecret && (
+              <div>
+                <label className="block text-sm font-medium mb-1">{labels.apiSecret}</label>
+                <input type="password" name="apiSecret" value={settings.isConnected ? maskedValue : formData.apiSecret} onChange={handleChange} className="input-style" disabled={settings.isConnected} />
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       <div className="flex justify-end">
@@ -130,6 +203,11 @@ const Integrations: React.FC = () => {
           platform={PlatformIntegration.YouCan}
           logo="https://youcan.shop/images/logo.svg"
           description="Intégrez votre boutique de la plateforme YouCan."
+        />
+        <IntegrationPlatformCard
+          platform={PlatformIntegration.GoogleSheets}
+          logo="https://cdn.worldvectorlogo.com/logos/google-sheets.svg"
+          description="Synchronisez les commandes depuis une feuille Google Sheets."
         />
       </div>
     </div>

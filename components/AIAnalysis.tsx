@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Order, Product, Client } from '../types';
 import { BrainCircuit, Sparkles, AlertTriangle, RefreshCw, Send, User, Bot, Settings, Save } from 'lucide-react';
+import { useCustomization } from '../contexts/CustomizationContext';
 
 interface AIAnalysisProps {
   orders: Order[];
@@ -20,9 +21,7 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
   const [error, setError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   
-  const [userApiKey, setUserApiKey] = useState<string>(() => {
-    return localStorage.getItem('user_gemini_api_key') || '';
-  });
+  const { geminiApiKey, setGeminiApiKey, saveGeminiApiKey } = useCustomization();
   const [showSettings, setShowSettings] = useState(false);
 
   const scrollToBottom = () => {
@@ -33,8 +32,8 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
     scrollToBottom();
   }, [messages]);
 
-  const handleSaveApiKey = () => {
-    localStorage.setItem('user_gemini_api_key', userApiKey);
+  const handleSaveApiKey = async () => {
+    await saveGeminiApiKey();
     setShowSettings(false);
     setError(null); // Clear any previous auth errors
   };
@@ -66,20 +65,13 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
   };
 
   const callGemini = async (userMessage: string, history: Message[]) => {
-    const apiKey = userApiKey || process.env.GEMINI_API_KEY;
+    const apiKey = geminiApiKey || process.env.GEMINI_API_KEY;
     
     if (!apiKey) {
       throw new Error("API Key is missing. Please configure it in the settings icon above.");
     }
 
     const systemContext = getSystemContext();
-
-    // Construct the conversation history for the API
-    // Gemini API expects 'user' and 'model' roles.
-    // We prepend the system context to the first user message or as a separate part if supported, 
-    // but for simple chat, prepending context to the latest prompt or maintaining it in history is key.
-    // Here we will send the context as a "system instruction" if we were using the SDK, 
-    // but with direct fetch on v1beta/models/gemini-pro (or flash), we can just include it in the conversation.
     
     const contents = [
       {
@@ -96,8 +88,6 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
       }
     ];
 
-    // Filter out any potential empty messages or system roles if we were mapping differently
-    
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`,
       {
@@ -197,8 +187,8 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
                 <div className="flex gap-2">
                     <input 
                         type="password" 
-                        value={userApiKey}
-                        onChange={(e) => setUserApiKey(e.target.value)}
+                        value={geminiApiKey}
+                        onChange={(e) => setGeminiApiKey(e.target.value)}
                         placeholder="Enter your Gemini API Key"
                         className="flex-1 p-2 border rounded-md bg-transparent text-sm"
                     />
@@ -210,7 +200,7 @@ const AIAnalysis: React.FC<AIAnalysisProps> = ({ orders, products, clients }) =>
                     </button>
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                    Leave empty to use the default system key. Your key is stored locally in your browser.
+                    Leave empty to use the default system key. Your key is stored in the database.
                 </p>
             </div>
         )}

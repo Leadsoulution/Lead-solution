@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Role } from '../types';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark, BrainCircuit } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark, BrainCircuit, History } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 
@@ -17,9 +17,8 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, setIsDarkMode, isCollapsed, toggleCollapsed }) => {
   const { currentUser, logout } = useAuth();
-  const isConfirmationUser = currentUser?.role === Role.Confirmation;
 
-  const navItems = [
+  const allNavItems = [
     { view: View.Dashboard, icon: <LayoutDashboard className="h-5 w-5" />, label: 'Dashboard' },
     { view: View.Products, icon: <Package className="h-5 w-5" />, label: 'Products' },
     { view: View.Orders, icon: <ShoppingCart className="h-5 w-5" />, label: 'Orders' },
@@ -27,18 +26,26 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
     { view: View.Statistics, icon: <BarChart3 className="h-5 w-5" />, label: 'Statistiques' },
     { view: View.AIAnalysis, icon: <BrainCircuit className="h-5 w-5" />, label: 'AI Analysis' },
     { view: View.Settings, icon: <Settings className="h-5 w-5" />, label: 'Settings' },
-  ].filter(item => {
-    if (isConfirmationUser) {
-      return item.view === View.Orders;
-    }
-    return true;
-  });
-
-  const adminNavItems = [
-     { view: View.AdminPanel, icon: <Shield className="h-5 w-5" />, label: 'Admin Panel' },
-     { view: View.Integrations, icon: <Link className="h-5 w-5" />, label: 'Integrations' },
-     { view: View.Financials, icon: <Landmark className="h-5 w-5" />, label: 'Financials' },
+    { view: View.AdminPanel, icon: <Shield className="h-5 w-5" />, label: 'Admin Panel' },
+    { view: View.Integrations, icon: <Link className="h-5 w-5" />, label: 'Integrations' },
+    { view: View.Financials, icon: <Landmark className="h-5 w-5" />, label: 'Financials' },
+    { view: View.History, icon: <History className="h-5 w-5" />, label: 'Historique' },
   ];
+
+  const visibleNavItems = allNavItems.filter(item => {
+      // If permissions are set, use them
+      if (currentUser?.permissions && currentUser.permissions.length > 0) {
+          return currentUser.permissions.includes(item.view);
+      }
+      // Fallback for backward compatibility or if permissions are missing
+      if (currentUser?.role === Role.Admin) return true;
+      if (currentUser?.role === Role.Confirmation) return item.view === View.Orders;
+      // Default for User: Dashboard, Products, Orders
+      if (currentUser?.role === Role.User) {
+          return [View.Dashboard, View.Products, View.Orders].includes(item.view);
+      }
+      return false;
+  });
 
   const handleLogout = () => {
     logout();
@@ -62,7 +69,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
       </div>
       <div className="flex-1 overflow-y-auto overflow-x-hidden">
         <nav className="grid items-start px-2 text-sm font-medium lg:px-4">
-          {navItems.map(item => (
+          {visibleNavItems.map(item => (
             <a
               key={item.view}
               href="#"
@@ -81,29 +88,6 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
               {!isCollapsed && item.label}
             </a>
           ))}
-          {currentUser?.role === Role.Admin && (
-            <div className="mt-2 border-t pt-2 dark:border-gray-700">
-              {adminNavItems.map(item => (
-                 <a
-                  key={item.view}
-                  href="#"
-                  title={isCollapsed ? item.label : undefined}
-                  onClick={(e) => {
-                    e.preventDefault();
-                    setView(item.view);
-                  }}
-                  className={`flex items-center gap-3 rounded-lg px-3 py-2 transition-all ${isCollapsed ? 'justify-center' : ''} ${
-                    currentView === item.view
-                      ? 'bg-muted text-primary dark:bg-dark-muted dark:text-dark-primary'
-                      : 'text-muted-foreground hover:text-primary dark:text-dark-muted-foreground dark:hover:text-dark-primary'
-                  }`}
-                >
-                  {item.icon}
-                  {!isCollapsed && item.label}
-                </a>
-              ))}
-            </div>
-          )}
         </nav>
       </div>
       <div className="mt-auto p-4 space-y-2">

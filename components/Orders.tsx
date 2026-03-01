@@ -5,6 +5,8 @@ import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Arch
 import ColorSelector from './ColorSelector';
 import { useAuth } from '../contexts/AuthContext';
 import { useCustomization } from '../contexts/CustomizationContext';
+import { useHistory } from '../contexts/HistoryContext';
+import { api } from '../src/services/api';
 import AddOrderModal from './AddOrderModal';
 import FilterColorSelector from './FilterColorSelector';
 import AddProductModal from './AddProductModal';
@@ -22,7 +24,8 @@ interface OrdersProps {
 const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts, onSync }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const { users, currentUser } = useAuth();
-  const { messageTemplates, formatCurrency } = useCustomization();
+  const { messageTemplates, formatCurrency, customStatuses } = useCustomization();
+  const { addLog } = useHistory();
   const [isAddOrderModalOpen, setIsAddOrderModalOpen] = useState(false);
   const [isAddProductModalOpen, setIsAddProductModalOpen] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -32,6 +35,13 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   const [selectedOrders, setSelectedOrders] = useState<Set<string>>(new Set());
   const [whatsappPreviewData, setWhatsappPreviewData] = useState<{ phone: string; message: string; rawPhone: string; } | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+
+  // Merge default enums with custom statuses
+  const mergedStatut = useMemo(() => ({ ...Statut, ...customStatuses.statut.reduce((acc, s) => ({...acc, [s]: s}), {}) }), [customStatuses.statut]);
+  const mergedRamassage = useMemo(() => ({ ...Ramassage, ...customStatuses.ramassage.reduce((acc, s) => ({...acc, [s]: s}), {}) }), [customStatuses.ramassage]);
+  const mergedLivraison = useMemo(() => ({ ...Livraison, ...customStatuses.livraison.reduce((acc, s) => ({...acc, [s]: s}), {}) }), [customStatuses.livraison]);
+  const mergedRemboursement = useMemo(() => ({ ...Remboursement, ...customStatuses.remboursement.reduce((acc, s) => ({...acc, [s]: s}), {}) }), [customStatuses.remboursement]);
+  const mergedCommandeRetour = useMemo(() => ({ ...CommandeRetour, ...customStatuses.commandeRetour.reduce((acc, s) => ({...acc, [s]: s}), {}) }), [customStatuses.commandeRetour]);
 
   const handleSyncClick = async () => {
     setIsSyncing(true);
@@ -126,25 +136,64 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         }
     };
 
-  const handleUpdateOrder = (orderId: string, field: keyof Order, value: any) => {
-    setOrders(prevOrders =>
-      prevOrders.map(order => {
-        if (order.id === orderId) {
-          const updatedOrder = { ...order, [field]: value };
-          // Auto-assign user on confirmation or recall for unassigned orders
-          if (
-            field === 'statut' &&
-            !order.assignedUserId &&
-            (value === Statut.Confirme || value === Statut.Rappel) &&
-            (currentUser?.role === Role.User || currentUser?.role === Role.Confirmation)
-          ) {
-            updatedOrder.assignedUserId = currentUser.id;
-          }
-          return updatedOrder;
+  const handleUpdateOrder = async (orderId: string, field: keyof Order, value: any) => {
+    // Optimistic Update
+    const originalOrders = [...orders];
+    const orderToUpdate = orders.find(o => o.id === orderId);
+    
+    if (!orderToUpdate) return;
+
+    const updatedOrder = { ...orderToUpdate, [field]: value };
+    
+    // Auto-assign logic
+    if (
+        field === 'statut' &&
+        !orderToUpdate.assignedUserId &&
+        (value === Statut.Confirme || value === Statut.Rappel) &&
+        (currentUser?.role === Role.User || currentUser?.role === Role.Confirmation)
+    ) {
+        updatedOrder.assignedUserId = currentUser.id;
+    }
+
+    // Apply optimistic update
+    setOrders(prevOrders => prevOrders.map(o => o.id === orderId ? updatedOrder : o));
+
+    try {
+        await api.updateOrder(updatedOrder);
+        
+        // Log the change
+        const oldValue = orderToUpdate[field];
+        if (oldValue !== value) {
+             addLog({
+                userId: currentUser?.id || 'unknown',
+                username: currentUser?.username || 'Unknown',
+                action: 'Update Order',
+                details: `Updated order ${orderId} field ${field} from ${oldValue} to ${value}`,
+                targetId: orderId,
+                targetType: 'Order',
+                oldValue: String(oldValue),
+                newValue: String(value)
+            });
+
+            // Log auto-assignment
+            if (updatedOrder.assignedUserId && !orderToUpdate.assignedUserId) {
+                addLog({
+                    userId: 'system',
+                    username: 'System',
+                    action: 'Auto Assign',
+                    details: `Auto-assigned order ${orderId} to user ${currentUser.username}`,
+                    targetId: orderId,
+                    targetType: 'Order',
+                    newValue: currentUser.id
+                });
+            }
         }
-        return order;
-      })
-    );
+    } catch (error) {
+        console.error("Failed to update order", error);
+        // Revert optimistic update
+        setOrders(originalOrders);
+        setNotification({ type: 'error', message: 'Erreur lors de la mise à jour.' });
+    }
   };
   
   const handleProductChange = (orderId: string, inputVal: string) => {
@@ -154,14 +203,34 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         p.id.toLowerCase() === inputVal.toLowerCase()
     );
 
+    const orderToUpdate = orders.find(o => o.id === orderId);
+    const newProductName = newProduct ? newProduct.name : inputVal;
+
+    if (orderToUpdate) {
+        const oldProduct = orderToUpdate.product;
+        if (oldProduct !== newProductName) {
+            addLog({
+                userId: currentUser?.id || 'unknown',
+                username: currentUser?.username || 'Unknown',
+                action: 'Update Order Product',
+                details: `Updated product for order ${orderId}`,
+                targetId: orderId,
+                targetType: 'Order',
+                oldValue: oldProduct,
+                newValue: newProductName
+            });
+        }
+    }
+
     setOrders(prevOrders =>
       prevOrders.map(order => {
         if (order.id === orderId) {
           // If we found a matching product (by ID or Name), use its official Name and Price
           const updatedOrder = { 
               ...order, 
-              product: newProduct ? newProduct.name : inputVal 
+              product: newProductName 
           };
+          
           if (newProduct) {
             updatedOrder.price = newProduct.sellingPrice;
           }
@@ -172,65 +241,64 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     );
   };
 
-   const handleFilterChange = (filterName: keyof typeof filters, value: string) => {
-    setFilters(prev => ({ ...prev, [filterName]: value }));
-  };
-  
-  const handleProductFilterClick = (productName: string) => {
-    setSelectedProductFilter(prev => prev === productName ? null : productName);
-  };
+  // ... (existing handlers)
 
-  const resetFilters = () => {
-    setFilters(initialFilters);
-  };
-  
   const handleWhatsAppClick = (order: Order, category: MessageCategory) => {
     const status = order[category];
     if (!status) return;
 
-    const messageConfig = (messageTemplates[category] as Record<string, MessageTemplate>)[status];
-    
-    if (!messageConfig || !messageConfig.enabled) {
-        alert(`Le message pour "${status}" est désactivé ou non configuré.`);
-        return;
-    }
+    const messageConfig = messageTemplates[category][status as keyof typeof messageTemplates[typeof category]];
+    if (!messageConfig || !messageConfig.enabled) return;
 
     let message = messageConfig.template;
+    message = message.replace(/{nom_client}/g, order.customerName);
+    message = message.replace(/{telephone}/g, order.customerPhone);
+    message = message.replace(/{adresse}/g, order.address);
+    message = message.replace(/{prix}/g, formatCurrency(order.price));
+    message = message.replace(/{produit}/g, order.product);
+    message = message.replace(/{note}/g, order.noteClient);
 
-    message = message.replace(/{{client}}/g, order.customerName)
-                     .replace(/{{id}}/g, order.id)
-                     .replace(/{{produit}}/g, order.product)
-                     .replace(/{{prix}}/g, formatCurrency(order.price))
-                     .replace(/{{status}}/g, status)
-                     .replace(/{{téléphone}}/g, order.customerPhone)
-                     .replace(/{{adresse}}/g, order.address);
-
-
-    let phoneForUrl = order.customerPhone.replace(/[^0-9]/g, '');
-    // Automatically format for Morocco (+212)
-    if (phoneForUrl.startsWith('0')) {
-      phoneForUrl = '212' + phoneForUrl.substring(1);
-    } else if (phoneForUrl.length === 9 && !phoneForUrl.startsWith('212')) {
-      // Handles cases like 6XXXXXXXX
-      phoneForUrl = '212' + phoneForUrl;
+    // Clean phone number: remove non-digits, ensure it starts with 212 if it's a Moroccan number (implied by context)
+    let phone = order.customerPhone.replace(/\D/g, '');
+    if (phone.startsWith('0')) {
+        phone = '212' + phone.substring(1);
     }
 
-    let displayPhone = `+${phoneForUrl}`;
-    if (phoneForUrl.startsWith('212') && phoneForUrl.length === 12) {
-      displayPhone = `+212 ${phoneForUrl.substring(3, 6)}-${phoneForUrl.substring(6, 9)}-${phoneForUrl.substring(9)}`;
-    }
-    
-    setWhatsappPreviewData({ phone: displayPhone, message, rawPhone: phoneForUrl });
+    setWhatsappPreviewData({
+        phone: phone,
+        message: message,
+        rawPhone: order.customerPhone
+    });
   };
 
   const handleConfirmWhatsApp = () => {
-    if (whatsappPreviewData) {
-      window.open(`https://wa.me/${whatsappPreviewData.rawPhone}?text=${encodeURIComponent(whatsappPreviewData.message)}`, '_blank');
-      setWhatsappPreviewData(null);
-    }
+      if (whatsappPreviewData) {
+          const encodedMessage = encodeURIComponent(whatsappPreviewData.message);
+          const url = `https://wa.me/${whatsappPreviewData.phone}?text=${encodedMessage}`;
+          window.open(url, '_blank');
+          setWhatsappPreviewData(null);
+      }
   };
-  
-  const handleAddOrder = (newOrderData: Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount'>) => {
+
+  const handleProductFilterClick = (productName: string) => {
+      if (selectedProductFilter === productName) {
+          setSelectedProductFilter(null);
+      } else {
+          setSelectedProductFilter(productName);
+      }
+  };
+
+  const handleFilterChange = (key: keyof typeof initialFilters, value: string) => {
+      setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const resetFilters = () => {
+      setFilters(initialFilters);
+      setSelectedProductFilter(null);
+      setSearchTerm('');
+  };
+
+  const handleAddOrder = async (newOrderData: Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount'>) => {
     const newOrder: Order = {
       // Data from form
       customerName: newOrderData.customerName,
@@ -252,9 +320,24 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       assignedUserId: null,
       callCount: 0,
     };
-    setOrders(prev => [newOrder, ...prev]);
-    setIsAddOrderModalOpen(false);
-    setNotification({ type: 'success', message: 'Commande ajoutée avec succès !' });
+
+    try {
+        const createdOrder = await api.createOrder(newOrder);
+        setOrders(prev => [createdOrder, ...prev]);
+        addLog({
+            userId: currentUser?.id || 'unknown',
+            username: currentUser?.username || 'Unknown',
+            action: 'Create Order',
+            details: `Created manual order ${createdOrder.id} for ${createdOrder.customerName}`,
+            targetId: createdOrder.id,
+            targetType: 'Order',
+        });
+        setIsAddOrderModalOpen(false);
+        setNotification({ type: 'success', message: 'Commande ajoutée avec succès !' });
+    } catch (error) {
+        console.error("Failed to create order", error);
+        setNotification({ type: 'error', message: 'Erreur lors de la création de la commande.' });
+    }
   };
   
   const handleFileImport = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -265,6 +348,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     reader.onload = (e) => {
         const text = e.target?.result as string;
         try {
+            // ... (existing CSV parsing logic)
             const rows = text.split('\n').filter(row => row.trim() !== '');
             if (rows.length < 2) throw new Error("Le fichier CSV doit avoir un en-tête et au moins une ligne de données.");
 
@@ -327,6 +411,13 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
             }).filter(o => o !== null) as Order[];
 
             setOrders(prev => [...newOrders, ...prev]);
+            addLog({
+                userId: currentUser?.id || 'unknown',
+                username: currentUser?.username || 'Unknown',
+                action: 'Import Orders',
+                details: `Imported ${newOrders.length} orders from CSV`,
+                targetType: 'Order',
+            });
             setNotification({ type: 'success', message: `${newOrders.length} commandes importées avec succès.` });
 
         } catch (error: any) {
@@ -346,6 +437,14 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         return;
     }
     setProducts(prev => [newProduct, ...prev]);
+    addLog({
+        userId: currentUser?.id || 'unknown',
+        username: currentUser?.username || 'Unknown',
+        action: 'Create Product',
+        details: `Created product ${newProduct.name} (${newProduct.id})`,
+        targetId: newProduct.id,
+        targetType: 'Product',
+    });
     setIsAddProductModalOpen(false);
     setNotification({ type: 'success', message: 'Produit ajouté avec succès !' });
   };
@@ -353,6 +452,14 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
   const handleDeleteOrder = (orderId: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cette commande ?')) {
         setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
+        addLog({
+            userId: currentUser?.id || 'unknown',
+            username: currentUser?.username || 'Unknown',
+            action: 'Delete Order',
+            details: `Deleted order ${orderId}`,
+            targetId: orderId,
+            targetType: 'Order',
+        });
         setNotification({ type: 'success', message: 'Commande supprimée avec succès.' });
     }
   };
@@ -590,35 +697,35 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     <FilterColorSelector
                         value={filters.statut}
                         onChange={(value) => handleFilterChange('statut', value)}
-                        options={Statut}
+                        options={mergedStatut}
                         category="statut"
                         defaultLabel="Toute Confirmation"
                     />
                     <FilterColorSelector
                         value={filters.ramassage}
                         onChange={(value) => handleFilterChange('ramassage', value)}
-                        options={Ramassage}
+                        options={mergedRamassage}
                         category="ramassage"
                         defaultLabel="Tout Ramassage"
                     />
                     <FilterColorSelector
                         value={filters.livraison}
                         onChange={(value) => handleFilterChange('livraison', value)}
-                        options={Livraison}
+                        options={mergedLivraison}
                         category="livraison"
                         defaultLabel="Toute Livraison"
                     />
                     <FilterColorSelector
                         value={filters.remboursement}
                         onChange={(value) => handleFilterChange('remboursement', value)}
-                        options={Remboursement}
+                        options={mergedRemboursement}
                         category="remboursement"
                         defaultLabel="Tout Remboursement"
                     />
                     <FilterColorSelector
                         value={filters.commandeRetour}
                         onChange={(value) => handleFilterChange('commandeRetour', value)}
-                        options={CommandeRetour}
+                        options={mergedCommandeRetour}
                         category="commandeRetour"
                         defaultLabel="Tout Retour"
                     />
@@ -677,6 +784,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.status}`}>Ramassage</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Ramassage</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Livraison</th>
+                <th className={`p-2 border ${headerStyles.actions}`}>Message de Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Remboursement</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Commande retour</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Actions</th>
@@ -749,7 +857,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                         <ColorSelector
                           value={order.statut}
                           onChange={(newValue) => handleUpdateOrder(order.id, 'statut', newValue)}
-                          options={Statut}
+                          options={mergedStatut}
                           category="statut"
                           disabled={isStatusLocked}
                         />
@@ -775,7 +883,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                         <ColorSelector
                             value={order.ramassage}
                             onChange={(newValue) => handleUpdateOrder(order.id, 'ramassage', newValue)}
-                            options={Ramassage}
+                            options={mergedRamassage}
                             category="ramassage"
                         />
                       </td>
@@ -784,15 +892,16 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                         <ColorSelector
                             value={order.livraison}
                             onChange={(newValue) => handleUpdateOrder(order.id, 'livraison', newValue)}
-                            options={Livraison}
+                            options={mergedLivraison}
                             category="livraison"
                         />
                       </td>
+                      <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'livraison')}</td>
                       <td className="p-1 border min-w-[120px]">
                         <ColorSelector
                             value={order.remboursement}
                             onChange={(newValue) => handleUpdateOrder(order.id, 'remboursement', newValue)}
-                            options={Remboursement}
+                            options={mergedRemboursement}
                             category="remboursement"
                         />
                       </td>
@@ -800,7 +909,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                          <ColorSelector
                             value={order.commandeRetour}
                             onChange={(newValue) => handleUpdateOrder(order.id, 'commandeRetour', newValue)}
-                            options={CommandeRetour}
+                            options={mergedCommandeRetour}
                             category="commandeRetour"
                         />
                       </td>

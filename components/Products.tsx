@@ -3,6 +3,9 @@ import { Order, Statut, Livraison, Product, CommandeRetour } from '../types';
 import { Trash2, PlusCircle, Archive, Edit, Save, X, Plus } from 'lucide-react';
 import AddProductModal from './AddProductModal';
 import { useCustomization } from '../contexts/CustomizationContext';
+import { useHistory } from '../contexts/HistoryContext';
+import { useAuth } from '../contexts/AuthContext';
+import { api } from '../src/services/api';
 
 interface ProductsProps {
   orders: Order[];
@@ -16,13 +19,15 @@ interface Column {
   width: number;
   minWidth: number;
   isCustom: boolean;
-  field?: keyof Product | 'stockReel' | 'stockDisponible' | 'priceRemise';
+  field?: keyof Product | 'stockReel' | 'stockDisponible' | 'priceRemise' | 'actions';
 }
 
 const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) => {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [notification, setNotification] = useState<{type: 'success' | 'error', message: string} | null>(null);
   const { formatCurrency } = useCustomization();
+  const { addLog } = useHistory();
+  const { currentUser } = useAuth();
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editedProductData, setEditedProductData] = useState<Partial<Product>>({});
 
@@ -39,7 +44,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     { id: 'discount', label: 'Remise (%)', width: 100, minWidth: 80, isCustom: false, field: 'discount' },
     { id: 'priceRemise', label: 'Prix Remisé', width: 100, minWidth: 80, isCustom: false, field: 'priceRemise' },
     { id: 'showInOrders', label: 'Afficher', width: 80, minWidth: 60, isCustom: false, field: 'showInOrders' },
-    { id: 'actions', label: 'Actions', width: 100, minWidth: 80, isCustom: false },
+    { id: 'actions', label: 'Actions', width: 100, minWidth: 80, isCustom: false, field: 'actions' },
   ]);
 
   const [isAddColumnModalOpen, setIsAddColumnModalOpen] = useState(false);
@@ -139,29 +144,87 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     });
   }, [orders, products]);
 
-  const handleAddProduct = (newProduct: Product) => {
+  // ... inside Products component ...
+
+  const handleAddProduct = async (newProduct: Product) => {
+    // Check for duplicate ID locally first (optional, but good for UX)
     if (products.some(p => p.id.toLowerCase() === newProduct.id.toLowerCase())) {
         alert("Un produit avec ce code d'article existe déjà.");
         return;
     }
-    setProducts(prev => [{ ...newProduct, showInOrders: true }, ...prev]);
-    setIsAddModalOpen(false);
-    setNotification({ type: 'success', message: 'Produit ajouté avec succès !' });
-  };
 
-  const handleDeleteProduct = (productId: string) => {
-    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce produit ? Cette action est irréversible.')) {
-        setProducts(prev => prev.filter(p => p.id !== productId));
-        setNotification({ type: 'success', message: 'Produit supprimé avec succès.' });
+    try {
+        const createdProduct = await api.createProduct({ ...newProduct, showInOrders: true });
+        setProducts(prev => [createdProduct, ...prev]);
+        addLog({
+            userId: currentUser?.id || 'unknown',
+            username: currentUser?.username || 'Unknown',
+            action: 'Create Product',
+            details: `Created product ${createdProduct.name} (${createdProduct.id})`,
+            targetId: createdProduct.id,
+            targetType: 'Product',
+        });
+        setIsAddModalOpen(false);
+        setNotification({ type: 'success', message: 'Produit ajouté avec succès !' });
+    } catch (error) {
+        console.error("Failed to create product", error);
+        setNotification({ type: 'error', message: 'Erreur lors de la création du produit.' });
     }
   };
 
-  const handleToggleShowInOrders = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
+    if (window.confirm('Êtes-vous sûr de vouloir supprimer ce produit ? Cette action est irréversible.')) {
+        try {
+            await api.deleteProduct(productId);
+            setProducts(prev => prev.filter(p => p.id !== productId));
+            addLog({
+                userId: currentUser?.id || 'unknown',
+                username: currentUser?.username || 'Unknown',
+                action: 'Delete Product',
+                details: `Deleted product ${productId}`,
+                targetId: productId,
+                targetType: 'Product',
+            });
+            setNotification({ type: 'success', message: 'Produit supprimé avec succès.' });
+        } catch (error) {
+            console.error("Failed to delete product", error);
+            setNotification({ type: 'error', message: 'Erreur lors de la suppression.' });
+        }
+    }
+  };
+
+  const handleToggleShowInOrders = async (productId: string) => {
+    const productToUpdate = products.find(p => p.id === productId);
+    if (!productToUpdate) return;
+
+    const newValue = !(productToUpdate.showInOrders ?? true);
+    const updatedProduct = { ...productToUpdate, showInOrders: newValue };
+
+    // Optimistic update
     setProducts(prevProducts => 
-        prevProducts.map(p => 
-            p.id === productId ? { ...p, showInOrders: !(p.showInOrders ?? true) } : p
-        )
+        prevProducts.map(p => p.id === productId ? updatedProduct : p)
     );
+
+    try {
+        await api.updateProduct(updatedProduct);
+        addLog({
+            userId: currentUser?.id || 'unknown',
+            username: currentUser?.username || 'Unknown',
+            action: 'Update Product',
+            details: `Toggled visibility for product ${productId} to ${newValue}`,
+            targetId: productId,
+            targetType: 'Product',
+            oldValue: String(!newValue),
+            newValue: String(newValue)
+        });
+    } catch (error) {
+        console.error("Failed to update product visibility", error);
+        // Revert
+        setProducts(prevProducts => 
+            prevProducts.map(p => p.id === productId ? productToUpdate : p)
+        );
+        setNotification({ type: 'error', message: 'Erreur lors de la mise à jour.' });
+    }
   };
   
   const handleEditClick = (product: Product) => {
@@ -174,16 +237,51 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
     setEditedProductData({});
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
     if (!editingProductId) return;
+    
+    // Find original product to log changes
+    const originalProduct = products.find(p => p.id === editingProductId);
+    if (!originalProduct) return;
+
+    const updatedProduct = { ...originalProduct, ...editedProductData } as Product;
+
+    // Optimistic Update
     setProducts(prevProducts =>
-      prevProducts.map(p =>
-        p.id === editingProductId ? { ...p, ...editedProductData } : p
-      )
+      prevProducts.map(p => p.id === editingProductId ? updatedProduct : p)
     );
+
+    try {
+        await api.updateProduct(updatedProduct);
+        
+        // Log changes
+        Object.keys(editedProductData).forEach(key => {
+            const k = key as keyof Product;
+            if (originalProduct[k] !== updatedProduct[k]) {
+                 addLog({
+                    userId: currentUser?.id || 'unknown',
+                    username: currentUser?.username || 'Unknown',
+                    action: 'Update Product',
+                    details: `Updated product ${editingProductId} field ${key}`,
+                    targetId: editingProductId,
+                    targetType: 'Product',
+                    oldValue: String(originalProduct[k]),
+                    newValue: String(updatedProduct[k])
+                });
+            }
+        });
+        setNotification({ type: 'success', message: 'Produit mis à jour avec succès.' });
+    } catch (error) {
+        console.error("Failed to update product", error);
+        // Revert
+        setProducts(prevProducts =>
+            prevProducts.map(p => p.id === editingProductId ? originalProduct : p)
+        );
+        setNotification({ type: 'error', message: 'Erreur lors de la mise à jour.' });
+    }
+
     setEditingProductId(null);
     setEditedProductData({});
-    setNotification({ type: 'success', message: 'Produit mis à jour avec succès.' });
   };
   
   const handleEditInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {

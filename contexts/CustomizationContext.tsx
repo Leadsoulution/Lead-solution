@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import {
   Statut, Ramassage, Livraison, Remboursement, CommandeRetour,
-  AllStatusColors, AllMessageTemplates
+  AllStatusColors, AllMessageTemplates, ColorCategory, Setting
 } from '../types';
+import { api } from '../src/services/api';
 
 const DEFAULT_COLORS: AllStatusColors = {
+  // ... (keep existing defaults)
   statut: {
     [Statut.NonDefini]: '#FFFFFF',
     [Statut.PasDeReponse]: '#eab308',
@@ -40,6 +42,7 @@ const DEFAULT_COLORS: AllStatusColors = {
 };
 
 const DEFAULT_MESSAGE_TEMPLATES: AllMessageTemplates = {
+  // ... (keep existing defaults)
   statut: {
     [Statut.NonDefini]: { template: "", enabled: false },
     [Statut.PasDeReponse]: { template: "Bonjour {{client}}, nous avons tenté de vous joindre concernant votre commande {{id}}. Nous réessaierons.", enabled: true },
@@ -88,6 +91,9 @@ interface CustomizationContextType {
   currency: Currency;
   setCurrency: React.Dispatch<React.SetStateAction<Currency>>;
   formatCurrency: (amount: number) => string;
+  geminiApiKey: string;
+  setGeminiApiKey: React.Dispatch<React.SetStateAction<string>>;
+  saveGeminiApiKey: () => Promise<void>;
 }
 
 const CustomizationContext = createContext<CustomizationContextType | undefined>(undefined);
@@ -107,46 +113,62 @@ const deepMerge = (defaults: any, loaded: any): any => {
 
 
 export const CustomizationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [colors, setAllColors] = useState<AllStatusColors>(() => {
-    try {
-      const savedColors = localStorage.getItem('allStatusColors');
-      const loadedColors = savedColors ? JSON.parse(savedColors) : {};
-      return deepMerge(DEFAULT_COLORS, loadedColors);
-    } catch (error) {
-      console.error("Error parsing all status colors from localStorage", error);
-      return DEFAULT_COLORS;
-    }
+  const [colors, setAllColors] = useState<AllStatusColors>(DEFAULT_COLORS);
+  const [messageTemplates, setMessageTemplates] = useState<AllMessageTemplates>(DEFAULT_MESSAGE_TEMPLATES);
+  const [currency, setCurrency] = useState<Currency>('MAD');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>('');
+  const [customStatuses, setCustomStatuses] = useState<Record<ColorCategory, string[]>>({
+    statut: [],
+    ramassage: [],
+    livraison: [],
+    remboursement: [],
+    commandeRetour: []
   });
 
-  const [messageTemplates, setMessageTemplates] = useState<AllMessageTemplates>(() => {
-    try {
-        const savedTemplates = localStorage.getItem('allMessageTemplates');
-        const loadedTemplates = savedTemplates ? JSON.parse(savedTemplates) : {};
-        return deepMerge(DEFAULT_MESSAGE_TEMPLATES, loadedTemplates);
-    } catch (error) {
-        console.error("Error parsing all message templates from localStorage", error);
-        return DEFAULT_MESSAGE_TEMPLATES;
-    }
-  });
-  
-  const [currency, setCurrency] = useState<Currency>(() => {
-    try {
-      const savedCurrency = localStorage.getItem('appCurrency');
-      return (savedCurrency as Currency) || 'MAD'; // Default to MAD
-    } catch (error) {
-      console.error("Error parsing currency from localStorage", error);
-      return 'MAD';
-    }
-  });
+  // Load settings from API on mount
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const settings = await api.getSettings();
+        if (Array.isArray(settings)) {
+            settings.forEach((s: Setting) => {
+                try {
+                    if (s.setting_key === 'allStatusColors') {
+                        const parsed = JSON.parse(s.setting_value);
+                        setAllColors(deepMerge(DEFAULT_COLORS, parsed));
+                    } else if (s.setting_key === 'allMessageTemplates') {
+                        const parsed = JSON.parse(s.setting_value);
+                        setMessageTemplates(deepMerge(DEFAULT_MESSAGE_TEMPLATES, parsed));
+                    } else if (s.setting_key === 'appCurrency') {
+                        setCurrency(s.setting_value as Currency);
+                    } else if (s.setting_key === 'customStatuses') {
+                        const parsed = JSON.parse(s.setting_value);
+                        setCustomStatuses(parsed);
+                    } else if (s.setting_key === 'geminiApiKey') {
+                        setGeminiApiKey(s.setting_value);
+                    }
+                } catch (e) {
+                    console.error(`Error parsing setting ${s.setting_key}`, e);
+                }
+            });
+        }
+      } catch (error) {
+        console.error("Failed to fetch settings", error);
+      }
+    };
+    fetchSettings();
+  }, []);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('appCurrency', currency);
-    } catch (error) {
-      console.error("Failed to save currency to localStorage", error);
-    }
+     // Auto-save currency when it changes (debounced or immediate?)
+     // For simplicity, we'll save immediately but handle errors silently
+     api.updateSettings({ key: 'appCurrency', value: currency }).catch(console.error);
   }, [currency]);
   
+  useEffect(() => {
+     api.updateSettings({ key: 'customStatuses', value: JSON.stringify(customStatuses) }).catch(console.error);
+  }, [customStatuses]);
+
   const formatCurrency = (amount: number) => {
     const options: Intl.NumberFormatOptions = {
       style: 'currency',
@@ -164,36 +186,103 @@ export const CustomizationProvider: React.FC<{ children: ReactNode }> = ({ child
   };
 
 
-  const saveColors = () => {
-    localStorage.setItem('allStatusColors', JSON.stringify(colors));
+  const saveColors = async () => {
+    try {
+        await api.updateSettings({ key: 'allStatusColors', value: JSON.stringify(colors) });
+    } catch (error) {
+        console.error("Failed to save colors", error);
+    }
   };
 
-  const resetColors = () => {
+  const resetColors = async () => {
     setAllColors(DEFAULT_COLORS);
-    localStorage.setItem('allStatusColors', JSON.stringify(DEFAULT_COLORS));
+    try {
+        await api.updateSettings({ key: 'allStatusColors', value: JSON.stringify(DEFAULT_COLORS) });
+    } catch (error) {
+        console.error("Failed to reset colors", error);
+    }
   }
 
-  const saveMessageTemplates = () => {
-    localStorage.setItem('allMessageTemplates', JSON.stringify(messageTemplates));
+  const saveMessageTemplates = async () => {
+    try {
+        await api.updateSettings({ key: 'allMessageTemplates', value: JSON.stringify(messageTemplates) });
+    } catch (error) {
+        console.error("Failed to save message templates", error);
+    }
   };
 
-  const resetMessageTemplates = () => {
+  const resetMessageTemplates = async () => {
     setMessageTemplates(DEFAULT_MESSAGE_TEMPLATES);
-    localStorage.setItem('allMessageTemplates', JSON.stringify(DEFAULT_MESSAGE_TEMPLATES));
+    try {
+        await api.updateSettings({ key: 'allMessageTemplates', value: JSON.stringify(DEFAULT_MESSAGE_TEMPLATES) });
+    } catch (error) {
+        console.error("Failed to reset message templates", error);
+    }
   }
 
+  const saveGeminiApiKey = async () => {
+      try {
+          await api.updateSettings({ key: 'geminiApiKey', value: geminiApiKey });
+      } catch (error) {
+          console.error("Failed to save Gemini API Key", error);
+      }
+  };
+
+  const addCustomStatus = (category: ColorCategory, status: string) => {
+    if (!status.trim()) return;
+    setCustomStatuses(prev => ({
+      ...prev,
+      [category]: [...(prev[category] || []), status.trim()]
+    }));
+    
+    // Initialize color for new status
+    setAllColors(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        [status.trim()]: '#FFFFFF'
+      }
+    }));
+
+    // Initialize message template for new status
+    setMessageTemplates(prev => ({
+      ...prev,
+      [category]: {
+        ...prev[category],
+        [status.trim()]: { template: "", enabled: false }
+      }
+    }));
+  };
+
+  const removeCustomStatus = (category: ColorCategory, status: string) => {
+    setCustomStatuses(prev => ({
+      ...prev,
+      [category]: (prev[category] || []).filter(s => s !== status)
+    }));
+  };
 
   return (
-    <CustomizationContext.Provider value={{ colors, setAllColors, saveColors, resetColors, messageTemplates, setMessageTemplates, saveMessageTemplates, resetMessageTemplates, currency, setCurrency, formatCurrency }}>
+    <CustomizationContext.Provider value={{ 
+      colors, setAllColors, saveColors, resetColors, 
+      messageTemplates, setMessageTemplates, saveMessageTemplates, resetMessageTemplates, 
+      currency, setCurrency, formatCurrency,
+      geminiApiKey, setGeminiApiKey, saveGeminiApiKey,
+      customStatuses, addCustomStatus, removeCustomStatus
+    }}>
       {children}
     </CustomizationContext.Provider>
   );
 };
 
-export const useCustomization = (): CustomizationContextType => {
+export const useCustomization = (): CustomizationContextType & {
+  customStatuses: Record<ColorCategory, string[]>;
+  addCustomStatus: (category: ColorCategory, status: string) => void;
+  removeCustomStatus: (category: ColorCategory, status: string) => void;
+} => {
   const context = useContext(CustomizationContext);
   if (context === undefined) {
     throw new Error('useCustomization must be used within a CustomizationProvider');
   }
+  // @ts-ignore - extending the context type locally for now as we didn't update the interface above yet
   return context;
 };

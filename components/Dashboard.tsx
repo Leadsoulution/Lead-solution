@@ -279,8 +279,8 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     const totalSales = (Object.values(salesByProduct) as number[]).reduce((sum: number, val: number) => sum + val, 0);
 
     return Object.entries(salesByProduct)
-      .map(([name, value]) => ({ name, value, percentage: totalSales > 0 ? ((value / totalSales) * 100).toFixed(0) : '0' }))
-      .sort((a, b) => b.value - a.value)
+      .map(([name, value]) => ({ name, value, percentage: totalSales > 0 ? ((Number(value) / totalSales) * 100).toFixed(0) : '0' }))
+      .sort((a, b) => Number(b.value) - Number(a.value))
       .slice(0, 6);
   }, [confirmedOrders]);
 
@@ -294,7 +294,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     
     return Object.entries(checkByProduct)
         .map(([name, data]: [string, { total: number; count: number }]) => ({ name, value: data.total / data.count }))
-        .sort((a, b) => b.value - a.value)
+        .sort((a, b) => Number(b.value) - Number(a.value))
         .slice(0, 6);
   }, [confirmedOrders]);
 

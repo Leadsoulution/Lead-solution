@@ -10,7 +10,7 @@ import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import Clients from './components/Clients';
 import Financials from './components/Financials';
-import { View, Role, Order, Product, Client, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour } from './types';
+import { View, Role, Order, Product, Client, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, IntegrationSettings } from './types';
 import { Menu, X } from 'lucide-react';
 import { CustomizationProvider } from './contexts/CustomizationContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -18,51 +18,56 @@ import { mockOrders, mockProducts, mockClients } from './services/mockData';
 import Integrations from './components/Integrations';
 import { IntegrationsProvider, useIntegrations } from './contexts/IntegrationsContext';
 import AIAnalysis from './components/AIAnalysis';
+import { HistoryProvider } from './contexts/HistoryContext';
+import History from './components/History';
+import { api } from './src/services/api';
 
-const DashboardLayout: React.FC = () => {
+const AppRouter: React.FC = () => {
   const { currentUser } = useAuth();
   const { integrations } = useIntegrations();
   const [isLoading, setIsLoading] = useState(false);
   
   const [view, setView] = useState<View>(() => {
+    if (currentUser?.permissions && currentUser.permissions.length > 0) {
+        return currentUser.permissions[0];
+    }
     if (currentUser?.role === Role.Confirmation) {
       return View.Orders;
     }
     return View.Dashboard;
   });
 
-  // Load Orders from LocalStorage or fallback to Mock Data
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const savedOrders = localStorage.getItem('app_orders');
-      return savedOrders ? JSON.parse(savedOrders) : JSON.parse(JSON.stringify(mockOrders));
-    } catch (e) {
-      console.error("Failed to load orders", e);
-      return JSON.parse(JSON.stringify(mockOrders));
-    }
-  });
+  // Load Orders from API
+  const [orders, setOrders] = useState<Order[]>([]);
+  // Load Products from API
+  const [products, setProducts] = useState<Product[]>([]);
+  // Load Clients from API
+  const [clients, setClients] = useState<Client[]>([]);
 
-  // Load Products from LocalStorage or fallback to Mock Data
-  const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const savedProducts = localStorage.getItem('app_products');
-      return savedProducts ? JSON.parse(savedProducts) : JSON.parse(JSON.stringify(mockProducts));
-    } catch (e) {
-      console.error("Failed to load products", e);
-      return JSON.parse(JSON.stringify(mockProducts));
-    }
-  });
-
-  // Load Clients from LocalStorage or fallback to Mock Data
-  const [clients, setClients] = useState<Client[]>(() => {
-    try {
-      const savedClients = localStorage.getItem('app_clients');
-      return savedClients ? JSON.parse(savedClients) : JSON.parse(JSON.stringify(mockClients));
-    } catch (e) {
-      console.error("Failed to load clients", e);
-      return JSON.parse(JSON.stringify(mockClients));
-    }
-  });
+  useEffect(() => {
+      const fetchData = async () => {
+          try {
+              setIsLoading(true);
+              const [fetchedOrders, fetchedProducts, fetchedClients] = await Promise.all([
+                  api.getOrders(),
+                  api.getProducts(),
+                  api.getClients()
+              ]);
+              setOrders(fetchedOrders);
+              setProducts(fetchedProducts);
+              setClients(fetchedClients);
+          } catch (error) {
+              console.error("Failed to fetch initial data", error);
+              // Fallback to mock data if API fails (or if USE_MOCK_DATA is true and localStorage is empty)
+              setOrders(JSON.parse(JSON.stringify(mockOrders)));
+              setProducts(JSON.parse(JSON.stringify(mockProducts)));
+              setClients(JSON.parse(JSON.stringify(mockClients)));
+          } finally {
+              setIsLoading(false);
+          }
+      };
+      fetchData();
+  }, []);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
     if (typeof window !== 'undefined') {
@@ -74,20 +79,9 @@ const DashboardLayout: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   
-  // Persist Orders to LocalStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('app_orders', JSON.stringify(orders));
-  }, [orders]);
-
-  // Persist Products to LocalStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('app_products', JSON.stringify(products));
-  }, [products]);
-
-  // Persist Clients to LocalStorage whenever they change
-  useEffect(() => {
-    localStorage.setItem('app_clients', JSON.stringify(clients));
-  }, [clients]);
+  // Persist Orders to API whenever they change (Optimistic UI handled in components, this is just a sync fallback if needed)
+  // In a real API-driven app, we don't sync the whole array back. Components call api.create/update.
+  // So we remove the useEffect hooks that saved to localStorage.
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -195,21 +189,30 @@ const DashboardLayout: React.FC = () => {
     const newClients: Client[] = [];
     orders.forEach(order => {
       if (order.customerPhone && !existingClientPhones.has(order.customerPhone)) {
-        newClients.push({
+        const newClient: Client = {
           id: `client-${order.customerPhone}`,
           name: order.customerName,
           phone: order.customerPhone,
           address: order.address,
-        });
+        };
+        newClients.push(newClient);
         existingClientPhones.add(order.customerPhone); // Prevent duplicates in the same run
       }
     });
+    
     if (newClients.length > 0) {
+      // Optimistic update
       setClients(prev => [...prev, ...newClients]);
+      
+      // Persist to API
+      newClients.forEach(client => {
+          api.createClient(client).catch(err => console.error(`Failed to auto-create client ${client.name}`, err));
+      });
     }
   }, [orders]);
 
   const fetchWooCommerceOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
+    // ... (keep existing implementation)
     try {
         const response = await fetch('/api/proxy/woocommerce', {
             method: 'POST',
@@ -235,7 +238,7 @@ const DashboardLayout: React.FC = () => {
         }
 
         return data.map((wcOrder: any) => ({
-            id: String(wcOrder.id),
+            id: `WC-${wcOrder.id}`,
             date: wcOrder.date_created,
             customerName: `${wcOrder.billing.first_name} ${wcOrder.billing.last_name}`.trim(),
             customerPhone: wcOrder.billing.phone || '',
@@ -257,6 +260,8 @@ const DashboardLayout: React.FC = () => {
         throw error;
     }
   };
+
+  // ... (keep other fetch functions)
 
   const fetchShopifyOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
     try {
@@ -284,7 +289,7 @@ const DashboardLayout: React.FC = () => {
         }
 
         return data.orders.map((order: any) => ({
-            id: String(order.id),
+            id: `SH-${order.id}`,
             date: order.created_at,
             customerName: `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim() || 'Client Inconnu',
             customerPhone: order.shipping_address?.phone || order.customer?.phone || '',
@@ -329,7 +334,7 @@ const DashboardLayout: React.FC = () => {
         const ordersList = Array.isArray(data) ? data : (data.data && Array.isArray(data.data) ? data.data : []);
 
         return ordersList.map((order: any) => ({
-            id: String(order.id),
+            id: `YC-${order.id}`,
             date: order.created_at,
             customerName: `${order.customer?.first_name || ''} ${order.customer?.last_name || ''}`.trim() || 'Client Inconnu',
             customerPhone: order.customer?.phone || '',
@@ -352,6 +357,70 @@ const DashboardLayout: React.FC = () => {
     }
   };
 
+  const fetchGoogleSheetsOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
+    try {
+        const response = await fetch('/api/proxy/googlesheets', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                spreadsheetId: settings.spreadsheetId,
+                clientEmail: settings.clientEmail,
+                privateKey: settings.privateKey
+            })
+        });
+        
+        if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || `Erreur API Google Sheets: ${response.statusText}`);
+        }
+        
+        const { headers, rows } = await response.json();
+        
+        if (!headers || !rows) return [];
+
+        // Helper to find index of a column by possible names
+        const findIndex = (possibleNames: string[]) => 
+            headers.findIndex((h: string) => possibleNames.some(name => h.toLowerCase().includes(name.toLowerCase())));
+
+        const idxId = findIndex(['id', 'ref', 'reference', 'order', 'commande']);
+        const idxDate = findIndex(['date', 'created', 'time', 'heure']);
+        const idxName = findIndex(['name', 'nom', 'client', 'customer']);
+        const idxPhone = findIndex(['phone', 'tel', 'mobile', 'telephone']);
+        const idxAddress = findIndex(['address', 'adresse', 'city', 'ville']);
+        const idxProduct = findIndex(['product', 'produit', 'item', 'article']);
+        const idxPrice = findIndex(['price', 'prix', 'total', 'montant']);
+        // const idxStatus = findIndex(['status', 'statut', 'state', 'etat']); // Not used for mapping to internal status yet
+
+        return rows.map((row: any[], index: number) => {
+            // Generate ID if missing
+            const id = (idxId !== -1 && row[idxId]) ? row[idxId] : `GS-${Date.now()}-${index}`;
+            
+            return {
+                id: String(id),
+                date: (idxDate !== -1 && row[idxDate]) ? row[idxDate] : new Date().toISOString(),
+                customerName: (idxName !== -1 && row[idxName]) ? row[idxName] : 'Client Inconnu',
+                customerPhone: (idxPhone !== -1 && row[idxPhone]) ? row[idxPhone] : '',
+                address: (idxAddress !== -1 && row[idxAddress]) ? row[idxAddress] : '',
+                product: (idxProduct !== -1 && row[idxProduct]) ? row[idxProduct] : 'Produit Inconnu',
+                price: (idxPrice !== -1 && row[idxPrice]) ? (parseFloat(String(row[idxPrice]).replace(/[^\d.-]/g, '')) || 0) : 0,
+                statut: Statut.NonDefini, // Default status
+                assignedUserId: null,
+                noteClient: 'Importé depuis Google Sheets',
+                ramassage: Ramassage.NonDefini,
+                livraison: Livraison.NonDefini,
+                remboursement: Remboursement.NonDefini,
+                commandeRetour: CommandeRetour.NonDefini,
+                platform: Platform.GoogleSheets,
+                callCount: 0,
+            };
+        });
+
+    } catch (error: any) {
+        console.error("Google Sheets Sync Error:", error);
+        throw error;
+    }
+  };
+
   const handleSyncOrders = async (silent: boolean = false) => {
     if (!silent) {
         setIsLoading(true);
@@ -360,16 +429,31 @@ const DashboardLayout: React.FC = () => {
     let newOrdersCount = 0;
     let errors: string[] = [];
 
+    const processSyncedOrders = async (syncedOrders: Order[]) => {
+        const newUniqueOrders: Order[] = [];
+        setOrders(prev => {
+            const existingIds = new Set(prev.map(o => o.id));
+            const unique = syncedOrders.filter(o => !existingIds.has(o.id));
+            unique.forEach(o => newUniqueOrders.push(o));
+            return [...unique, ...prev];
+        });
+        
+        // Persist new orders
+        for (const order of newUniqueOrders) {
+            try {
+                await api.createOrder(order);
+            } catch (e) {
+                console.error(`Failed to persist synced order ${order.id}`, e);
+            }
+        }
+        return newUniqueOrders.length;
+    };
+
     // 1. WooCommerce Sync
     if (integrations.WooCommerce.isConnected) {
         try {
             const wcOrders = await fetchWooCommerceOrders(integrations.WooCommerce);
-            setOrders(prev => {
-                const existingIds = new Set(prev.map(o => o.id));
-                const uniqueNewOrders = wcOrders.filter(o => !existingIds.has(o.id));
-                newOrdersCount += uniqueNewOrders.length;
-                return [...uniqueNewOrders, ...prev];
-            });
+            newOrdersCount += await processSyncedOrders(wcOrders);
         } catch (e: any) {
             errors.push(`WooCommerce: ${e.message}`);
         }
@@ -379,12 +463,7 @@ const DashboardLayout: React.FC = () => {
     if (integrations.Shopify.isConnected) {
         try {
             const shopifyOrders = await fetchShopifyOrders(integrations.Shopify);
-            setOrders(prev => {
-                const existingIds = new Set(prev.map(o => o.id));
-                const uniqueNewOrders = shopifyOrders.filter(o => !existingIds.has(o.id));
-                newOrdersCount += uniqueNewOrders.length;
-                return [...uniqueNewOrders, ...prev];
-            });
+            newOrdersCount += await processSyncedOrders(shopifyOrders);
         } catch (e: any) {
             errors.push(`Shopify: ${e.message}`);
         }
@@ -394,19 +473,26 @@ const DashboardLayout: React.FC = () => {
     if (integrations.YouCan.isConnected) {
         try {
             const youCanOrders = await fetchYouCanOrders(integrations.YouCan);
-            setOrders(prev => {
-                const existingIds = new Set(prev.map(o => o.id));
-                const uniqueNewOrders = youCanOrders.filter(o => !existingIds.has(o.id));
-                newOrdersCount += uniqueNewOrders.length;
-                return [...uniqueNewOrders, ...prev];
-            });
+            newOrdersCount += await processSyncedOrders(youCanOrders);
         } catch (e: any) {
             errors.push(`YouCan: ${e.message}`);
         }
     }
 
+    // 4. Google Sheets Sync
+    if (integrations.GoogleSheets.isConnected) {
+        try {
+            const gsOrders = await fetchGoogleSheetsOrders(integrations.GoogleSheets);
+            newOrdersCount += await processSyncedOrders(gsOrders);
+        } catch (e: any) {
+            errors.push(`Google Sheets: ${e.message}`);
+        }
+    }
+
+    // ... (rest of the function)
+
     // 2. Simulation / Demo Fallback (if no real sync happened and no errors, or explicit demo request)
-    const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected;
+    const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected || integrations.GoogleSheets.isConnected;
     
     if (!silent) {
         // If we tried to sync but failed, show error.
@@ -456,7 +542,7 @@ const DashboardLayout: React.FC = () => {
 
   // Automatic Polling
   useEffect(() => {
-    const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected;
+    const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected || integrations.GoogleSheets.isConnected;
     
     if (isAnyConnected) {
         const intervalId = setInterval(() => {
@@ -469,7 +555,29 @@ const DashboardLayout: React.FC = () => {
 
 
   const renderView = () => {
-    const isAdmin = currentUser?.role === Role.Admin;
+    const hasPermission = (viewToCheck: View) => {
+        if (currentUser?.permissions && currentUser.permissions.length > 0) {
+            return currentUser.permissions.includes(viewToCheck);
+        }
+        // Fallback logic matching Sidebar
+        if (currentUser?.role === Role.Admin) return true;
+        if (currentUser?.role === Role.Confirmation) return viewToCheck === View.Orders;
+        if (currentUser?.role === Role.User) {
+             return [View.Dashboard, View.Products, View.Orders].includes(viewToCheck);
+        }
+        return false;
+    };
+
+    if (!hasPermission(view)) {
+        return (
+            <div className="flex flex-col items-center justify-center h-full text-center p-8">
+                <h2 className="text-2xl font-bold mb-4">Accès non autorisé</h2>
+                <p className="text-muted-foreground">Vous n'avez pas la permission d'accéder à cette page.</p>
+                <p className="text-sm mt-2">Veuillez contacter l'administrateur.</p>
+            </div>
+        );
+    }
+
     switch (view) {
       case View.Dashboard:
         return <Dashboard orders={orders} />;
@@ -486,84 +594,72 @@ const DashboardLayout: React.FC = () => {
       case View.Settings:
         return <Settings />;
       case View.AdminPanel:
-        return isAdmin ? <AdminPanel products={products} /> : <Dashboard orders={orders} />;
+        return <AdminPanel products={products} />;
       case View.Integrations:
-        return isAdmin ? <Integrations /> : <Dashboard orders={orders} />;
+        return <Integrations />;
       case View.Financials:
-        return isAdmin ? <Financials orders={orders} products={products} /> : <Dashboard orders={orders} />;
+        return <Financials orders={orders} products={products} />;
+      case View.History:
+        return <History />;
       default:
         return <Dashboard orders={orders}/>;
     }
   };
 
   return (
-    <div className={`relative flex h-screen bg-secondary dark:bg-dark-secondary/50 text-secondary-foreground dark:text-dark-secondary-foreground`}>
-      {isLoading && (
-        <div className="absolute inset-0 bg-black/50 z-50 flex items-center justify-center">
-          <div className="text-white text-center p-8 bg-black/60 rounded-lg">
-            <svg className="animate-spin h-10 w-10 mx-auto mb-4" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 2V6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M12 18V22" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4.93 4.93L7.76 7.76" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M16.24 16.24L19.07 19.07" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M2 12H6" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M18 12H22" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M4.93 19.07L7.76 16.24" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                <path d="M16.24 7.76L19.07 4.93" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            <p className="text-lg font-semibold">Synchronisation des commandes...</p>
-            <p className="text-sm">Veuillez patienter.</p>
-          </div>
+    <div className="flex h-screen overflow-hidden bg-background text-foreground">
+      <Sidebar
+        currentView={view}
+        setView={setView}
+        isDarkMode={isDarkMode}
+        setIsDarkMode={setIsDarkMode}
+        isCollapsed={isSidebarCollapsed}
+        toggleCollapsed={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+      />
+      <main className={`flex-1 overflow-y-auto transition-all duration-300 ${isSidebarCollapsed ? 'ml-0' : ''}`}>
+        <div className="container mx-auto p-4 md:p-6 lg:p-8 max-w-7xl">
+           <div className="md:hidden mb-4">
+              <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 rounded-md bg-card border shadow-sm">
+                  <Menu size={24} />
+              </button>
+           </div>
+           {isSidebarOpen && (
+               <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm md:hidden">
+                   <div className="fixed inset-y-0 left-0 w-3/4 max-w-xs bg-background p-6 shadow-lg">
+                       <div className="flex items-center justify-between mb-8">
+                           <h2 className="text-lg font-semibold">Menu</h2>
+                           <button onClick={() => setIsSidebarOpen(false)} className="p-2 rounded-md hover:bg-accent">
+                               <X size={24} />
+                           </button>
+                       </div>
+                       <Sidebar
+                           currentView={view}
+                           setView={(v) => { setView(v); setIsSidebarOpen(false); }}
+                           isDarkMode={isDarkMode}
+                           setIsDarkMode={setIsDarkMode}
+                           isCollapsed={false}
+                           toggleCollapsed={() => {}}
+                       />
+                   </div>
+               </div>
+           )}
+           
+           {renderView()}
         </div>
-      )}
-      <div className={`
-        fixed inset-y-0 left-0 z-30 w-64
-        bg-card dark:bg-dark-card 
-        transition-all duration-300 ease-in-out 
-        transform ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full'} 
-        lg:translate-x-0 lg:static lg:inset-0
-        ${isSidebarCollapsed ? 'lg:w-20' : 'lg:w-64'}
-      `}>
-          <Sidebar 
-            currentView={view} 
-            setView={setView} 
-            isDarkMode={isDarkMode} 
-            setIsDarkMode={setIsDarkMode} 
-            isCollapsed={isSidebarCollapsed}
-            toggleCollapsed={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-          />
-      </div>
-
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex justify-between items-center p-4 bg-card dark:bg-dark-card lg:hidden border-b border-gray-200 dark:border-gray-800">
-          <h1 className="text-xl font-bold">Orderly</h1>
-          <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2">
-            {isSidebarOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </header>
-
-        <main className="flex-1 overflow-x-hidden overflow-y-auto p-4 md:p-8">
-          {renderView()}
-        </main>
-      </div>
+      </main>
     </div>
   );
 };
 
-const AppRouter: React.FC = () => {
-  const { currentUser } = useAuth();
-  if (!currentUser) {
-    return <Login />;
-  }
-  return <DashboardLayout />;
-};
-
+// ... (inside App component)
 const App: React.FC = () => {
   return (
     <CustomizationProvider>
       <AuthProvider>
         <IntegrationsProvider>
-          <AppRouter />
+          <HistoryProvider>
+            <AppRouter />
+          </HistoryProvider>
         </IntegrationsProvider>
       </AuthProvider>
     </CustomizationProvider>

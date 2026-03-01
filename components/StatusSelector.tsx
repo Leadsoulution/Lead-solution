@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Statut } from '../types';
-import { useStatusColors } from '../contexts/ColorContext';
+import { useCustomization } from '../contexts/CustomizationContext';
 import { ChevronDown } from 'lucide-react';
 import { colord } from 'colord';
 
@@ -11,7 +11,7 @@ interface StatusSelectorProps {
 
 const StatusSelector: React.FC<StatusSelectorProps> = ({ value, onChange }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { colors } = useStatusColors();
+  const { colors } = useCustomization();
   const wrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -31,7 +31,7 @@ const StatusSelector: React.FC<StatusSelectorProps> = ({ value, onChange }) => {
     setIsOpen(false);
   };
 
-  const selectedColor = colors[value];
+  const selectedColor = colors.statut[value];
   const selectedTextColor = colord(selectedColor).isDark() ? 'text-white' : 'text-black';
 
 
@@ -50,7 +50,7 @@ const StatusSelector: React.FC<StatusSelectorProps> = ({ value, onChange }) => {
       {isOpen && (
         <ul className="absolute z-10 w-full mt-1 bg-card dark:bg-dark-card border rounded-md shadow-lg max-h-60 overflow-auto">
           {Object.values(Statut).map(status => {
-            const statusColor = colors[status];
+            const statusColor = colors.statut[status];
             const statusTextColor = colord(statusColor).isDark() ? 'text-white' : 'text-black';
             return (
               <li

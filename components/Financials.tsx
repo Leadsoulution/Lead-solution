@@ -1,117 +1,145 @@
 
-import React, { useMemo, useState, useEffect } from 'react';
-import { Order, Product, Livraison } from '../types';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { Order, Product, Livraison, Setting } from '../types';
 import { useCustomization } from '../contexts/CustomizationContext';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, TooltipProps } from 'recharts';
 import { DollarSign, Landmark, TrendingDown, TrendingUp, Save } from 'lucide-react';
 import { NameType, ValueType } from 'recharts/types/component/DefaultTooltipContent';
+import { api } from '../src/services/api';
 
 interface FinancialsProps {
   orders: Order[];
   products: Product[];
 }
 
+interface CalculatorData {
+    leads: number;
+    adSpend: number;
+    confRate: number;
+    delivRate: number;
+    sellingPrice: number;
+    productCost: number;
+    shippingFee: number;
+}
+
+interface FinancialCosts {
+    monthlyFixed: { [key: string]: number };
+    perUnit: { [key: string]: number };
+    variable: {
+        facebookAdsPercent: number;
+        tiktokAdsPercent: number;
+        confirmation: number;
+        delivery: number;
+    };
+}
+
 interface ProductAnalysis extends Product {
     quantity_sold: number;
     costs: {
-      per_unit_cost: number;
-      variable_cost: number;
-      total_cost_per_unit_sold: number;
-      net_profit_per_unit: number;
-      margin_percent: number;
+        per_unit_cost: number;
+        variable_cost: number;
+        total_cost_per_unit_sold: number;
+        net_profit_per_unit: number;
+        margin_percent: number;
     };
     total_revenue: number;
     total_product_line_expenses: number;
     total_product_line_profit: number;
 }
 
-const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string; }> = ({ title, value, icon, color }) => (
-  <div className={`p-6 rounded-2xl text-white ${color} shadow-lg`}>
-    <div className="flex justify-between items-center">
-      <p className="text-sm text-white/90">{title}</p>
-      {icon}
+const StatCard: React.FC<{ title: string; value: string; icon: React.ReactNode; color: string }> = ({ title, value, icon, color }) => (
+    <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-sm dark:bg-dark-card dark:text-dark-card-foreground flex items-center justify-between">
+        <div>
+            <p className="text-sm font-medium text-muted-foreground">{title}</p>
+            <h3 className="text-2xl font-bold mt-2">{value}</h3>
+        </div>
+        <div className={`p-3 rounded-full text-white ${color}`}>
+            {icon}
+        </div>
     </div>
-    <p className="text-3xl font-bold mt-2">{value}</p>
-  </div>
 );
 
-const CustomTooltip: React.FC<TooltipProps<ValueType, NameType>> = ({ active, payload, label }) => {
-  const { formatCurrency } = useCustomization();
-  if (active && payload && payload.length) {
-    const val = payload[0].value;
-    return (
-      <div className="p-3 bg-card dark:bg-dark-card rounded-lg shadow-lg border dark:border-gray-700">
-        <p className="font-semibold">{label}</p>
-        <p className="text-sm text-emerald-500">{`Profit: ${formatCurrency(Number(val))}`}</p>
-      </div>
-    );
-  }
-  return null;
+const CustomTooltip = ({ active, payload, label }: any) => {
+    const { formatCurrency } = useCustomization();
+    if (active && payload && payload.length) {
+        return (
+            <div className="bg-white dark:bg-gray-800 p-4 border border-gray-200 dark:border-gray-700 rounded shadow-lg">
+                <p className="font-bold mb-2">{label}</p>
+                {payload.map((entry, index) => (
+                    <p key={index} style={{ color: entry.color }}>
+                        {entry.name}: {formatCurrency(Number(entry.value))}
+                    </p>
+                ))}
+            </div>
+        );
+    }
+    return null;
 };
-
-// Define an interface for the costs state to ensure type safety.
-interface FinancialCosts {
-  monthlyFixed: {
-    rent: number;
-    wifi: number;
-  };
-  perUnit: {
-    packaging: number;
-    transport: number;
-  };
-  variable: {
-    facebookAdsPercent: number;
-    tiktokAdsPercent: number;
-    confirmation: number;
-    delivery: number;
-  };
-}
-
-// Add interface for calculator data to ensure type safety.
-interface CalculatorData {
-  leads: number;
-  adSpend: number;
-  confRate: number;
-  delivRate: number;
-  sellingPrice: number;
-  productCost: number;
-  shippingFee: number;
-}
 
 const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
   const { formatCurrency } = useCustomization();
   const [notification, setNotification] = useState<string | null>(null);
 
-  // Apply the CalculatorData interface to the useState hook.
-  const [calculatorData, setCalculatorData] = useState<CalculatorData>(() => {
-    try {
-      const savedData = localStorage.getItem('financialCalculatorData');
-      return savedData ? JSON.parse(savedData) : {
-        leads: 1000,
-        adSpend: 20000,
-        confRate: 60,
-        delivRate: 50,
-        sellingPrice: 250,
-        productCost: 100,
-        shippingFee: 40,
-      };
-    } catch (e) {
-      return {
-        leads: 1000,
-        adSpend: 20000,
-        confRate: 60,
-        delivRate: 50,
-        sellingPrice: 250,
-        productCost: 100,
-        shippingFee: 40,
-      };
-    }
-  });
+  // Default values
+  const defaultCalculatorData: CalculatorData = {
+    leads: 1000,
+    adSpend: 20000,
+    confRate: 60,
+    delivRate: 50,
+    sellingPrice: 250,
+    productCost: 100,
+    shippingFee: 40,
+  };
 
-  // Auto-save calculator data whenever it changes
+  const defaultCosts: FinancialCosts = {
+    monthlyFixed: { rent: 3, wifi: 1 },
+    perUnit: { packaging: 5, transport: 4 },
+    variable: { facebookAdsPercent: 15, tiktokAdsPercent: 10, confirmation: 15, delivery: 35 },
+  };
+
+  const [calculatorData, setCalculatorData] = useState<CalculatorData>(defaultCalculatorData);
+  const [costs, setCosts] = useState<FinancialCosts>(defaultCosts);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load settings from API
   useEffect(() => {
-    localStorage.setItem('financialCalculatorData', JSON.stringify(calculatorData));
-  }, [calculatorData]);
+    const fetchSettings = async () => {
+      try {
+        const settings = await api.getSettings();
+        if (Array.isArray(settings)) {
+            settings.forEach((s: Setting) => {
+                if (s.setting_key === 'financialCalculatorData') {
+                    try {
+                        setCalculatorData(JSON.parse(s.setting_value));
+                    } catch (e) {
+                        console.error("Error parsing financialCalculatorData", e);
+                    }
+                } else if (s.setting_key === 'financialCosts') {
+                    try {
+                        setCosts(JSON.parse(s.setting_value));
+                    } catch (e) {
+                        console.error("Error parsing financialCosts", e);
+                    }
+                }
+            });
+        }
+      } catch (error) {
+        console.error("Failed to fetch financial settings", error);
+      } finally {
+        setIsLoaded(true);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  // Debounce save for calculator data
+  useEffect(() => {
+    if (!isLoaded) return;
+    const timer = setTimeout(() => {
+        api.updateSettings({ key: 'financialCalculatorData', value: JSON.stringify(calculatorData) }).catch(console.error);
+    }, 1000);
+    return () => clearTimeout(timer);
+  }, [calculatorData, isLoaded]);
 
   useEffect(() => {
     if (notification) {
@@ -120,51 +148,6 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
     }
   }, [notification]);
   
-  const [costs, setCosts] = useState<FinancialCosts>(() => {
-    try {
-        const savedCosts = localStorage.getItem('financialCosts');
-        const parsed = savedCosts ? JSON.parse(savedCosts) : {};
-
-        const defaults: FinancialCosts = {
-            monthlyFixed: { rent: 3, wifi: 1 },
-            perUnit: { packaging: 5, transport: 4 },
-            variable: { facebookAdsPercent: 15, tiktokAdsPercent: 10, confirmation: 15, delivery: 35 },
-        };
-
-        // Migration for old data structure
-        if (parsed.fixed) {
-            parsed.monthlyFixed = { rent: parsed.fixed.rent, wifi: parsed.fixed.wifi };
-            parsed.perUnit = { packaging: parsed.fixed.packaging, transport: parsed.fixed.transport };
-            delete parsed.fixed;
-        }
-
-        // Deep merge with type safety by coercing to Number
-        const result: FinancialCosts = {
-            monthlyFixed: {
-                rent: Number(parsed.monthlyFixed?.rent ?? defaults.monthlyFixed.rent),
-                wifi: Number(parsed.monthlyFixed?.wifi ?? defaults.monthlyFixed.wifi),
-            },
-            perUnit: {
-                packaging: Number(parsed.perUnit?.packaging ?? defaults.perUnit.packaging),
-                transport: Number(parsed.perUnit?.transport ?? defaults.perUnit.transport),
-            },
-            variable: {
-                facebookAdsPercent: Number(parsed.variable?.facebookAdsPercent ?? defaults.variable.facebookAdsPercent),
-                tiktokAdsPercent: Number(parsed.variable?.tiktokAdsPercent ?? defaults.variable.tiktokAdsPercent),
-                confirmation: Number(parsed.variable?.confirmation ?? defaults.variable.confirmation),
-                delivery: Number(parsed.variable?.delivery ?? defaults.variable.delivery),
-            },
-        };
-        return result;
-    } catch (e) {
-        return {
-            monthlyFixed: { rent: 3, wifi: 1 },
-            perUnit: { packaging: 5, transport: 4 },
-            variable: { facebookAdsPercent: 15, tiktokAdsPercent: 10, confirmation: 15, delivery: 35 },
-        };
-    }
-  });
-
   const handleCostChange = (type: 'monthlyFixed' | 'perUnit' | 'variable', name: string, value: string) => {
     // Allow empty string for better UX when deleting content
     const numValue = value === '' ? 0 : parseFloat(value);
@@ -238,9 +221,14 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
     };
   }, [calculatorData]);
 
-  const saveCosts = () => {
-      localStorage.setItem('financialCosts', JSON.stringify(costs));
-      setNotification('Frais sauvegardés avec succès !');
+  const saveCosts = async () => {
+      try {
+        await api.updateSettings({ key: 'financialCosts', value: JSON.stringify(costs) });
+        setNotification('Frais sauvegardés avec succès !');
+      } catch (error) {
+        console.error("Failed to save costs", error);
+        setNotification('Erreur lors de la sauvegarde.');
+      }
   };
 
   const financialAnalysis: ProductAnalysis[] = useMemo(() => {

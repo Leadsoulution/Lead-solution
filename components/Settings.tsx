@@ -10,7 +10,7 @@ const ColorSettingsSection: React.FC<{
   options: object;
 }> = ({ title, category, options }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { colors, setAllColors } = useCustomization();
+  const { colors, setAllColors, customStatuses } = useCustomization();
   
   const handleColorChange = (option: string, color: string) => {
     setAllColors(prevColors => ({
@@ -22,6 +22,11 @@ const ColorSettingsSection: React.FC<{
     }));
   };
 
+  const allOptions = [
+      ...Object.values(options),
+      ...(customStatuses[category] || [])
+  ];
+
   return (
     <div className="border-b dark:border-gray-700 last:border-b-0 py-2">
       <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center py-2 font-semibold text-lg hover:bg-accent dark:hover:bg-dark-accent/50 rounded-md px-2">
@@ -31,7 +36,7 @@ const ColorSettingsSection: React.FC<{
       {isOpen && (
          <div className="pt-4 pb-2 px-2 grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
             {/* FIX: Explicitly type `option` as a string to prevent it from being inferred as `any`, which causes indexing errors. */}
-            {Object.values(options).map((option: string) => (
+            {allOptions.map((option: string) => (
               <div key={option} className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 rounded-full border dark:border-gray-600" style={{ backgroundColor: (colors[category] as any)[option] }}></div>
@@ -39,7 +44,7 @@ const ColorSettingsSection: React.FC<{
                 </div>
                 <input 
                   type="color"
-                  value={(colors[category] as any)[option]}
+                  value={(colors[category] as any)[option] || '#FFFFFF'}
                   onChange={(e) => handleColorChange(option, e.target.value)}
                   className="w-10 h-10 p-0 border-none rounded-md cursor-pointer bg-transparent"
                   style={{'--tw-ring-color': (colors[category] as any)[option] } as React.CSSProperties}
@@ -58,7 +63,7 @@ const MessageSettingsSection: React.FC<{
   options: object;
 }> = ({ title, category, options }) => {
   const [isOpen, setIsOpen] = useState(false);
-  const { messageTemplates, setMessageTemplates } = useCustomization();
+  const { messageTemplates, setMessageTemplates, customStatuses } = useCustomization();
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const cursorPositionRef = useRef<{ position: number; status: string } | null>(null);
 
@@ -83,7 +88,7 @@ const MessageSettingsSection: React.FC<{
       const newCategoryTemplates = { ...prev[category] };
       // FIX: Cast to `any` to allow string indexing on a union of record types, which TypeScript cannot otherwise resolve safely.
       (newCategoryTemplates as any)[status] = {
-        ...(newCategoryTemplates as any)[status],
+        ...((newCategoryTemplates as any)[status] || { enabled: false }),
         template: value
       };
       return {
@@ -97,7 +102,7 @@ const MessageSettingsSection: React.FC<{
     setMessageTemplates(prev => {
       const newCategoryTemplates = { ...prev[category] };
       // FIX: Cast to `any` to allow string indexing on a union of record types.
-      const currentTemplate = (newCategoryTemplates as any)[status];
+      const currentTemplate = (newCategoryTemplates as any)[status] || { template: "", enabled: false };
       (newCategoryTemplates as any)[status] = {
         ...currentTemplate,
         enabled: !currentTemplate.enabled
@@ -122,6 +127,11 @@ const MessageSettingsSection: React.FC<{
     handleTemplateChange(status, newText);
   };
 
+  const allOptions = [
+      ...Object.values(options),
+      ...(customStatuses[category] || [])
+  ];
+
   return (
      <div className="border-b dark:border-gray-700 last:border-b-0 py-2">
         <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center py-2 font-semibold text-lg hover:bg-accent dark:hover:bg-dark-accent/50 rounded-md px-2">
@@ -131,10 +141,9 @@ const MessageSettingsSection: React.FC<{
         {isOpen && (
             <div className="pt-4 pb-2 px-2 space-y-6">
                 {/* FIX: Explicitly type `status` as a string to resolve errors when it's used as an index, a key, or a child element. */}
-                {Object.values(options).map((status: string) => {
+                {allOptions.map((status: string) => {
                     // FIX: Cast to `any` to allow string indexing on a union of record types.
-                    const messageConfig = (messageTemplates[category] as any)[status];
-                    if (!messageConfig) return null;
+                    const messageConfig = (messageTemplates[category] as any)[status] || { template: "", enabled: false };
                     const isEnabled = messageConfig.enabled;
 
                     return (
@@ -193,6 +202,82 @@ const MessageSettingsSection: React.FC<{
 };
 
 
+const CustomStatusSettingsSection: React.FC<{
+  title: string;
+  category: ColorCategory;
+  defaultOptions: object;
+}> = ({ title, category, defaultOptions }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const { customStatuses, addCustomStatus, removeCustomStatus } = useCustomization();
+  const [newStatus, setNewStatus] = useState('');
+
+  const handleAdd = () => {
+    if (newStatus.trim()) {
+      addCustomStatus(category, newStatus.trim());
+      setNewStatus('');
+    }
+  };
+
+  const currentCustomStatuses = customStatuses[category] || [];
+
+  return (
+    <div className="border-b dark:border-gray-700 last:border-b-0 py-2">
+      <button onClick={() => setIsOpen(!isOpen)} className="w-full flex justify-between items-center py-2 font-semibold text-lg hover:bg-accent dark:hover:bg-dark-accent/50 rounded-md px-2">
+        <span>{title}</span>
+        <ChevronDown size={20} className={`transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+      {isOpen && (
+         <div className="pt-4 pb-2 px-2 space-y-4">
+            <div className="flex gap-2">
+                <input 
+                    type="text" 
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
+                    placeholder="Nouveau statut..."
+                    className="flex-1 p-2 border rounded-md bg-transparent focus:ring-2 focus:ring-blue-500 text-sm"
+                />
+                <button 
+                    onClick={handleAdd}
+                    disabled={!newStatus.trim()}
+                    className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                >
+                    Ajouter
+                </button>
+            </div>
+
+            <div className="space-y-2">
+                <h4 className="text-sm font-medium text-muted-foreground">Statuts par défaut</h4>
+                <div className="flex flex-wrap gap-2">
+                    {Object.values(defaultOptions).map((status: string) => (
+                        <span key={status} className="px-2 py-1 bg-secondary dark:bg-dark-secondary rounded-md text-xs text-secondary-foreground border border-transparent">
+                            {status}
+                        </span>
+                    ))}
+                </div>
+            </div>
+
+            {currentCustomStatuses.length > 0 && (
+                <div className="space-y-2">
+                    <h4 className="text-sm font-medium text-muted-foreground">Statuts personnalisés</h4>
+                    <div className="flex flex-wrap gap-2">
+                        {currentCustomStatuses.map((status: string) => (
+                            <div key={status} className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md text-xs text-blue-800 dark:text-blue-300">
+                                <span>{status}</span>
+                                <button onClick={() => removeCustomStatus(category, status)} className="text-red-500 hover:text-red-700 ml-1">
+                                    <XCircle size={14} />
+                                </button>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+         </div>
+      )}
+    </div>
+  );
+};
+
+
 const Settings: React.FC = () => {
   const { saveColors, resetColors, saveMessageTemplates, resetMessageTemplates, currency, setCurrency } = useCustomization();
 
@@ -232,6 +317,17 @@ const Settings: React.FC = () => {
             <option value="EUR">Euro (€)</option>
             <option value="USD">Dollar ($)</option>
           </select>
+        </div>
+      </div>
+
+       <div className="space-y-4">
+        <h2 className="text-2xl font-semibold border-b pb-2">Gestion des Statuts Personnalisés</h2>
+         <div className="p-6 rounded-xl border bg-card text-card-foreground shadow dark:bg-dark-card dark:text-dark-card-foreground">
+             <CustomStatusSettingsSection title="Statuts de Confirmation" category="statut" defaultOptions={Statut} />
+             <CustomStatusSettingsSection title="Statuts de Ramassage" category="ramassage" defaultOptions={Ramassage} />
+             <CustomStatusSettingsSection title="Statuts de Livraison" category="livraison" defaultOptions={Livraison} />
+             <CustomStatusSettingsSection title="Statuts de Remboursement" category="remboursement" defaultOptions={Remboursement} />
+             <CustomStatusSettingsSection title="Statuts de Retour" category="commandeRetour" defaultOptions={CommandeRetour} />
         </div>
       </div>
 

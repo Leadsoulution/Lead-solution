@@ -5,6 +5,7 @@ export enum Platform {
   WooCommerce = 'WooCommerce',
   Manual = 'Manual',
   YouCan = 'YouCan',
+  GoogleSheets = 'GoogleSheets',
 }
 
 // Nouveaux enums pour les menus déroulants
@@ -96,6 +97,7 @@ export enum View {
     Clients = 'Clients',
     Financials = 'Financials',
     AIAnalysis = 'AIAnalysis',
+    History = 'History',
 }
 
 export interface StatCardProps {
@@ -105,6 +107,19 @@ export interface StatCardProps {
   description?: string;
 }
 
+export interface LogEntry {
+  id: string;
+  timestamp: string;
+  userId: string;
+  username: string;
+  action: string;
+  details: string;
+  targetId?: string; // ID of the object being modified (e.g., order ID)
+  targetType?: 'Order' | 'User' | 'Product' | 'Settings' | 'Auth';
+  oldValue?: string;
+  newValue?: string;
+}
+
 // New message template structure
 export interface MessageTemplate {
   template: string;
@@ -112,12 +127,12 @@ export interface MessageTemplate {
 }
 
 // New granular message template types
-export type StatutMessageTemplates = Record<Statut, MessageTemplate>;
-export type RamassageMessageTemplates = Record<Ramassage, MessageTemplate>;
-export type LivraisonMessageTemplates = Record<Livraison, MessageTemplate>;
+export type StatutMessageTemplates = Record<string, MessageTemplate>;
+export type RamassageMessageTemplates = Record<string, MessageTemplate>;
+export type LivraisonMessageTemplates = Record<string, MessageTemplate>;
 // FIX: Corrected typo from Remboursemest to Remboursement.
-export type RemboursementMessageTemplates = Record<Remboursement, MessageTemplate>;
-export type CommandeRetourMessageTemplates = Record<CommandeRetour, MessageTemplate>;
+export type RemboursementMessageTemplates = Record<string, MessageTemplate>;
+export type CommandeRetourMessageTemplates = Record<string, MessageTemplate>;
 
 export interface AllMessageTemplates {
   statut: StatutMessageTemplates;
@@ -130,11 +145,11 @@ export type MessageCategory = keyof AllMessageTemplates;
 
 
 // Types de couleurs pour chaque catégorie
-export type StatutColors = Record<Statut, string>;
-export type RamassageColors = Record<Ramassage, string>;
-export type LivraisonColors = Record<Livraison, string>;
-export type RemboursementColors = Record<Remboursement, string>;
-export type CommandeRetourColors = Record<CommandeRetour, string>;
+export type StatutColors = Record<string, string>;
+export type RamassageColors = Record<string, string>;
+export type LivraisonColors = Record<string, string>;
+export type RemboursementColors = Record<string, string>;
+export type CommandeRetourColors = Record<string, string>;
 
 // Type global pour contenir toutes les configurations de couleurs
 export interface AllStatusColors {
@@ -156,15 +171,23 @@ export enum Role {
 export interface User {
   id: string;
   username: string;
+  email?: string;
   password: string; // Note: In a real app, never store plaintext passwords.
   role: Role;
   assignedProductIds: string[];
+  permissions?: View[];
 }
 
 export enum PlatformIntegration {
   Shopify = 'Shopify',
   WooCommerce = 'WooCommerce',
   YouCan = 'YouCan',
+  GoogleSheets = 'GoogleSheets',
+}
+
+export interface Setting {
+  setting_key: string;
+  setting_value: string;
 }
 
 export interface IntegrationSettings {
@@ -173,4 +196,7 @@ export interface IntegrationSettings {
   storeUrl: string;
   apiKey: string;
   apiSecret: string;
+  spreadsheetId?: string;
+  clientEmail?: string;
+  privateKey?: string;
 }

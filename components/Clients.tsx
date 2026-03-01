@@ -5,12 +5,13 @@ import { useAuth } from '../contexts/AuthContext';
 import { useCustomization } from '../contexts/CustomizationContext';
 import { PlusCircle, Search, User, Phone, Home, ShoppingBag, DollarSign, Edit, Trash2, X, AlertCircle, ChevronDown } from 'lucide-react';
 import { colord } from 'colord';
+import { api } from '../src/services/api';
 
 // Modal for Adding/Editing a Client
 interface ClientModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (client: Client) => { success: boolean, message: string };
+  onSave: (client: Client) => Promise<{ success: boolean, message: string }>;
   client: Client | null;
 }
 
@@ -32,13 +33,13 @@ const ClientModal: React.FC<ClientModalProps> = ({ isOpen, onClose, onSave, clie
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.phone) {
       setError('Le nom et le téléphone sont obligatoires.');
       return;
     }
-    const result = onSave(formData);
+    const result = await onSave(formData);
     if (result.success) {
       onClose();
     } else {
@@ -112,26 +113,44 @@ const Clients: React.FC<ClientsProps> = ({ clients, setClients, orders }) => {
     );
   }, [clientProfiles, searchTerm]);
 
-  const handleSaveClient = (clientData: Client): { success: boolean, message: string } => {
-    if (editingClient) { // Editing existing client
-      if (clients.some(c => c.phone === clientData.phone && c.id !== clientData.id)) {
-        return { success: false, message: 'Ce numéro de téléphone est déjà utilisé par un autre client.' };
-      }
-      setClients(prev => prev.map(c => c.id === clientData.id ? clientData : c));
-    } else { // Adding new client
-      if (clients.some(c => c.phone === clientData.phone)) {
-        return { success: false, message: 'Un client avec ce numéro de téléphone existe déjà.' };
-      }
-      setClients(prev => [...prev, clientData]);
+  // ... inside Clients component ...
+
+  const handleSaveClient = async (clientData: Client): Promise<{ success: boolean, message: string }> => {
+    try {
+        if (editingClient) { // Editing existing client
+          // Check for duplicate phone (excluding current client)
+          if (clients.some(c => c.phone === clientData.phone && c.id !== clientData.id)) {
+            return { success: false, message: 'Ce numéro de téléphone est déjà utilisé par un autre client.' };
+          }
+          
+          await api.updateClient(clientData);
+          setClients(prev => prev.map(c => c.id === clientData.id ? clientData : c));
+        } else { // Adding new client
+          if (clients.some(c => c.phone === clientData.phone)) {
+            return { success: false, message: 'Un client avec ce numéro de téléphone existe déjà.' };
+          }
+          
+          const createdClient = await api.createClient(clientData);
+          setClients(prev => [...prev, createdClient]);
+        }
+        return { success: true, message: '' };
+    } catch (error) {
+        console.error("Failed to save client", error);
+        return { success: false, message: 'Erreur lors de la sauvegarde du client.' };
     }
-    return { success: true, message: '' };
   };
 
-  const handleDeleteClient = (clientId: string) => {
+  const handleDeleteClient = async (clientId: string) => {
     if (window.confirm("Êtes-vous sûr de vouloir supprimer ce client ? Toutes ses commandes resteront, mais le client sera retiré de cette liste.")) {
-      setClients(prev => prev.filter(c => c.id !== clientId));
-      if (selectedClient?.id === clientId) {
-        setSelectedClient(null);
+      try {
+          await api.deleteClient(clientId);
+          setClients(prev => prev.filter(c => c.id !== clientId));
+          if (selectedClient?.id === clientId) {
+            setSelectedClient(null);
+          }
+      } catch (error) {
+          console.error("Failed to delete client", error);
+          alert("Erreur lors de la suppression du client.");
       }
     }
   };

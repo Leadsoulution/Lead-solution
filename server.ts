@@ -107,6 +107,47 @@ async function startServer() {
     }
   });
 
+  app.post('/api/proxy/googlesheets', async (req, res) => {
+    try {
+      const { spreadsheetId, clientEmail, privateKey } = req.body;
+      if (!spreadsheetId || !clientEmail || !privateKey) {
+        return res.status(400).json({ error: 'Missing credentials' });
+      }
+
+      // Import dynamically to avoid issues if package is missing during dev
+      const { google } = await import('googleapis') as any;
+
+      const auth = new google.auth.JWT(
+        clientEmail,
+        undefined,
+        privateKey,
+        ['https://www.googleapis.com/auth/spreadsheets.readonly']
+      );
+
+      const sheets = google.sheets({ version: 'v4', auth });
+
+      // Assume data is in the first sheet
+      const response = await sheets.spreadsheets.values.get({
+        spreadsheetId,
+        range: 'A1:Z1000', // Fetch first 1000 rows
+      });
+
+      const rows = response.data.values;
+      if (!rows || rows.length === 0) {
+        return res.json({ headers: [], rows: [] });
+      }
+
+      const headers = rows[0];
+      const dataRows = rows.slice(1);
+
+      res.json({ headers, rows: dataRows });
+
+    } catch (error: any) {
+      console.error('Google Sheets Proxy Error:', error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
