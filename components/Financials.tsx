@@ -562,7 +562,7 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
               {financialAnalysis.map(p => p && (
                 <tr key={p.id} className="hover:bg-muted dark:hover:bg-dark-muted">
                   <td className="px-4 py-3 font-medium flex items-center gap-3">
-                    <img src={p.imageUrl} alt={p.name} className="h-10 w-10 object-cover rounded-md" />
+                    {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="h-10 w-10 object-cover rounded-md" /> : <div className="h-10 w-10 bg-gray-200 dark:bg-gray-700 rounded-md"></div>}
                     <div>
                         <div className="font-semibold">{p.name}</div>
                         <div className="text-xs text-muted-foreground">{p.category}</div>

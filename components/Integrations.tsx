@@ -15,9 +15,37 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
   const [formData, setFormData] = useState<Omit<IntegrationSettings, 'platform' | 'isConnected'>>(settings);
   const [notification, setNotification] = useState<string | null>(null);
 
+  const [isOAuthLoading, setIsOAuthLoading] = useState(false);
+
   useEffect(() => {
     setFormData(integrations[platform]);
   }, [integrations, platform]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      // Validate origin is from AI Studio preview or localhost
+      const origin = event.origin;
+      if (!origin.endsWith('.run.app') && !origin.includes('localhost')) {
+        return;
+      }
+      
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' && event.data?.platform === platform) {
+        setIsOAuthLoading(false);
+        updateIntegration(platform, { 
+          ...formData, 
+          storeUrl: event.data.storeUrl,
+          apiKey: event.data.accessToken, // For Shopify, the access token acts as the API key
+          apiSecret: 'oauth-token', // Dummy value since we use the access token
+          isConnected: true 
+        });
+        setNotification('Connexion réussie via OAuth !');
+        setTimeout(() => setNotification(null), 3000);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [platform, formData, updateIntegration]);
 
   const getLabels = () => {
     switch (platform) {
@@ -78,6 +106,40 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
     updateIntegration(platform, { ...formData, isConnected: true });
   };
 
+  const handleOAuthConnect = async () => {
+    if (!formData.storeUrl) {
+      alert("Veuillez remplir l'URL du magasin pour vous connecter via OAuth.");
+      return;
+    }
+
+    setIsOAuthLoading(true);
+    try {
+      const redirectUri = `${window.location.origin}/api/auth/shopify/callback`;
+      const response = await fetch(`/api/auth/shopify/url?storeUrl=${encodeURIComponent(formData.storeUrl)}&redirectUri=${encodeURIComponent(redirectUri)}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to get auth URL');
+      }
+      
+      const { url } = await response.json();
+      
+      const authWindow = window.open(
+        url,
+        'oauth_popup',
+        'width=600,height=700'
+      );
+
+      if (!authWindow) {
+        alert('Veuillez autoriser les popups pour ce site afin de connecter votre compte.');
+        setIsOAuthLoading(false);
+      }
+    } catch (error: any) {
+      console.error('OAuth error:', error);
+      alert(`Erreur d'authentification: ${error.message}`);
+      setIsOAuthLoading(false);
+    }
+  };
+
   const handleDisconnect = () => {
     updateIntegration(platform, { isConnected: false });
   };
@@ -99,7 +161,7 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
     <div className="p-6 rounded-xl border bg-card text-card-foreground shadow-md dark:bg-dark-card dark:text-dark-card-foreground space-y-6">
       <div className="flex flex-col md:flex-row items-center justify-between gap-4">
         <div className="flex items-center gap-4">
-          <img src={logo} alt={`${platform} logo`} className="h-12 w-12" />
+          {logo ? <img src={logo} alt={`${platform} logo`} className="h-12 w-12" /> : <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-full"></div>}
           <div>
             <h3 className="text-xl font-semibold">{platform}</h3>
             <p className="text-muted-foreground dark:text-dark-muted-foreground text-sm">{description}</p>
@@ -149,15 +211,26 @@ const IntegrationPlatformCard: React.FC<IntegrationPlatformCardProps> = ({ platf
         )}
       </div>
 
-      <div className="flex justify-end">
+      <div className="flex justify-end gap-2">
         {settings.isConnected ? (
           <button onClick={handleDisconnect} className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-red-500 rounded-md hover:bg-red-600">
             <PowerOff size={16} /> Déconnecter
           </button>
         ) : (
-          <button onClick={handleConnect} className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600">
-            <Power size={16} /> Sauvegarder & Connecter
-          </button>
+          <>
+            {platform === PlatformIntegration.Shopify && (
+              <button 
+                onClick={handleOAuthConnect} 
+                disabled={isOAuthLoading}
+                className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-[#95BF47] rounded-md hover:bg-[#7a9d3a] disabled:opacity-50"
+              >
+                <Power size={16} /> {isOAuthLoading ? 'Connexion...' : 'Connecter avec Shopify (OAuth)'}
+              </button>
+            )}
+            <button onClick={handleConnect} className="flex items-center gap-2 px-4 py-2 font-semibold text-white bg-blue-500 rounded-md hover:bg-blue-600">
+              <Power size={16} /> Sauvegarder & Connecter (Manuel)
+            </button>
+          </>
         )}
       </div>
 

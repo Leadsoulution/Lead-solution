@@ -649,7 +649,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     }`}
                 >
                     <div className="w-16 h-12 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden flex items-center justify-center">
-                         <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                         {product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 dark:bg-gray-700"></div>}
                     </div>
                     <span className="text-xs font-semibold leading-tight line-clamp-2">{product.name}</span>
                     {selectedProductFilter === product.name && (
@@ -815,7 +815,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                       <td className="p-1 border min-w-[200px]">{renderInput(order, 'address', 'Adresse...', !isEditable)}</td>
                       <td className="p-1 border min-w-[200px]">
                         <div className="flex items-center gap-2">
-                            {product ? (
+                            {product && product.imageUrl ? (
                                 <img src={product.imageUrl} alt={product.name} className="h-10 w-10 object-cover rounded-md flex-shrink-0" />
                             ) : (
                                 <div className="h-10 w-10 bg-secondary dark:bg-dark-secondary rounded-md flex-shrink-0"></div>

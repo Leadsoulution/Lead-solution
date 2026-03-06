@@ -1,6 +1,6 @@
 import express from 'express';
-import { createServer as createViteServer } from 'vite';
 import cors from 'cors';
+import apiRouter from './server/routes/api';
 
 async function startServer() {
   const app = express();
@@ -9,7 +9,105 @@ async function startServer() {
   app.use(cors());
   app.use(express.json());
 
+  // Mount the database API routes
+  app.use('/api', apiRouter);
+
+  // Global error handler for API routes
+  app.use('/api', (err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('API Error:', err);
+    res.status(500).json({ error: err.message || 'Internal Server Error' });
+  });
+
   // API Proxy Routes
+  app.get('/api/auth/shopify/url', (req, res) => {
+    const { storeUrl, redirectUri } = req.query;
+    if (!storeUrl || typeof storeUrl !== 'string') {
+      return res.status(400).json({ error: 'storeUrl is required' });
+    }
+    if (!redirectUri || typeof redirectUri !== 'string') {
+      return res.status(400).json({ error: 'redirectUri is required' });
+    }
+
+    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    if (!clientId) {
+      return res.status(500).json({ error: 'SHOPIFY_CLIENT_ID is not configured' });
+    }
+
+    const baseUrl = storeUrl.replace(/\/$/, '');
+    
+    const params = new URLSearchParams({
+      client_id: clientId,
+      scope: 'read_orders,read_products,read_customers',
+      redirect_uri: redirectUri,
+      state: Math.random().toString(36).substring(7),
+    });
+
+    const authUrl = `${baseUrl}/admin/oauth/authorize?${params.toString()}`;
+    res.json({ url: authUrl });
+  });
+
+  app.get(['/api/auth/shopify/callback', '/api/auth/shopify/callback/'], async (req, res) => {
+    const { code, shop } = req.query;
+    
+    if (!code || !shop || typeof code !== 'string' || typeof shop !== 'string') {
+      return res.status(400).send('Missing code or shop parameter');
+    }
+
+    const clientId = process.env.SHOPIFY_CLIENT_ID;
+    const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
+
+    if (!clientId || !clientSecret) {
+      return res.status(500).send('Shopify OAuth credentials are not configured');
+    }
+
+    try {
+      const response = await fetch(`https://${shop}/admin/oauth/access_token`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          client_id: clientId,
+          client_secret: clientSecret,
+          code,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Shopify token exchange error:', errorText);
+        return res.status(response.status).send(`Failed to exchange token: ${errorText}`);
+      }
+
+      const data = await response.json();
+      const accessToken = data.access_token;
+
+      res.send(`
+        <html>
+          <body>
+            <script>
+              if (window.opener) {
+                window.opener.postMessage({ 
+                  type: 'OAUTH_AUTH_SUCCESS', 
+                  platform: 'Shopify',
+                  accessToken: '${accessToken}',
+                  storeUrl: 'https://${shop}'
+                }, '*');
+                window.close();
+              } else {
+                window.location.href = '/';
+              }
+            </script>
+            <p>Authentication successful. This window should close automatically.</p>
+          </body>
+        </html>
+      `);
+    } catch (error: any) {
+      console.error('Shopify OAuth Error:', error);
+      res.status(500).send(`OAuth Error: ${error.message}`);
+    }
+  });
+
   app.post('/api/proxy/woocommerce', async (req, res) => {
     try {
       const { storeUrl, apiKey, apiSecret } = req.body;
@@ -50,15 +148,22 @@ async function startServer() {
       }
 
       const baseUrl = storeUrl.replace(/\/$/, '');
-      const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+      
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (apiSecret === 'oauth-token') {
+        headers['X-Shopify-Access-Token'] = apiKey;
+      } else {
+        const auth = Buffer.from(`${apiKey}:${apiSecret}`).toString('base64');
+        headers['Authorization'] = `Basic ${auth}`;
+      }
 
       console.log(`Proxying Shopify request to: ${baseUrl}/admin/api/2023-10/orders.json`);
 
       const response = await fetch(`${baseUrl}/admin/api/2023-10/orders.json?status=any&limit=20`, {
-        headers: {
-          'Authorization': `Basic ${auth}`,
-          'Content-Type': 'application/json'
-        }
+        headers
       });
 
       if (!response.ok) {
@@ -120,7 +225,7 @@ async function startServer() {
       const auth = new google.auth.JWT(
         clientEmail,
         undefined,
-        privateKey,
+        privateKey.replace(/\\n/g, '\n'),
         ['https://www.googleapis.com/auth/spreadsheets.readonly']
       );
 
@@ -151,6 +256,7 @@ async function startServer() {
 
   // Vite middleware for development
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',

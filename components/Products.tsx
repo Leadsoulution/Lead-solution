@@ -358,7 +358,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
         case 'imageUrl':
             return (
                 <div className="h-10 w-10 bg-gray-100 dark:bg-gray-800 rounded-md overflow-hidden flex items-center justify-center">
-                    <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" />
+                    {product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-cover" /> : <div className="w-full h-full bg-gray-200 dark:bg-gray-700"></div>}
                 </div>
             );
         case 'id': return <span className="font-mono text-xs">{product.id}</span>;
@@ -474,7 +474,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
                     <td className="px-2 py-2 w-20">
                       {isEditing ?
                         <input type="text" name="imageUrl" value={editedProductData.imageUrl || ''} onChange={handleEditInputChange} className={inputClass} placeholder="URL de l'image" />
-                        : <img src={product.imageUrl} alt={product.name} className="h-12 w-12 object-cover rounded-md" />
+                        : (product.imageUrl ? <img src={product.imageUrl} alt={product.name} className="h-12 w-12 object-cover rounded-md" /> : <div className="h-12 w-12 bg-gray-200 dark:bg-gray-700 rounded-md"></div>)
                       }
                     </td>
                     <td className="px-2 py-2 font-mono text-muted-foreground min-w-[100px]">{product.id}</td>
