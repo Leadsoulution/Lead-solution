@@ -305,6 +305,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       customerPhone: newOrderData.customerPhone,
       address: newOrderData.address,
       price: newOrderData.price,
+      quantity: newOrderData.quantity || 1,
       product: newOrderData.product,
       noteClient: newOrderData.noteClient,
 
