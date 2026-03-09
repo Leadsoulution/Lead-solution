@@ -151,6 +151,7 @@ const AppRouter: React.FC = () => {
             address: raw.address,
             // Use local name if SKU matched, otherwise use fallback name
             product: matchedProduct ? matchedProduct.name : raw.fallbackProduct,
+            quantity: 1,
             // Use local price if matched to ensure consistency, otherwise external price
             price: matchedProduct ? matchedProduct.sellingPrice : raw.price,
             statut: Statut.NonDefini,
@@ -244,6 +245,7 @@ const AppRouter: React.FC = () => {
             customerPhone: wcOrder.billing.phone || '',
             address: [wcOrder.billing.address_1, wcOrder.billing.city].filter(Boolean).join(', '),
             product: wcOrder.line_items?.[0]?.name || 'Produit Inconnu',
+            quantity: wcOrder.line_items?.[0]?.quantity || 1,
             price: parseFloat(wcOrder.total),
             statut: Statut.NonDefini, // Default status for new imports
             assignedUserId: null,
@@ -295,6 +297,7 @@ const AppRouter: React.FC = () => {
             customerPhone: order.shipping_address?.phone || order.customer?.phone || '',
             address: [order.shipping_address?.address1, order.shipping_address?.city].filter(Boolean).join(', '),
             product: order.line_items?.[0]?.name || 'Produit Inconnu',
+            quantity: order.line_items?.[0]?.quantity || 1,
             price: parseFloat(order.total_price),
             statut: Statut.NonDefini,
             assignedUserId: null,
@@ -340,6 +343,7 @@ const AppRouter: React.FC = () => {
             customerPhone: order.customer?.phone || '',
             address: order.shipping_address?.address1 || '',
             product: order.items?.[0]?.name || 'Produit Inconnu',
+            quantity: order.items?.[0]?.quantity || 1,
             price: parseFloat(order.total),
             statut: Statut.NonDefini,
             assignedUserId: null,
@@ -388,6 +392,7 @@ const AppRouter: React.FC = () => {
         const idxPhone = findIndex(['phone', 'tel', 'mobile', 'telephone']);
         const idxAddress = findIndex(['address', 'adresse', 'city', 'ville']);
         const idxProduct = findIndex(['product', 'produit', 'item', 'article']);
+        const idxQuantity = findIndex(['quantity', 'quantite', 'qte', 'qty']);
         const idxPrice = findIndex(['price', 'prix', 'total', 'montant']);
         // const idxStatus = findIndex(['status', 'statut', 'state', 'etat']); // Not used for mapping to internal status yet
 
@@ -402,6 +407,7 @@ const AppRouter: React.FC = () => {
                 customerPhone: (idxPhone !== -1 && row[idxPhone]) ? row[idxPhone] : '',
                 address: (idxAddress !== -1 && row[idxAddress]) ? row[idxAddress] : '',
                 product: (idxProduct !== -1 && row[idxProduct]) ? row[idxProduct] : 'Produit Inconnu',
+                quantity: (idxQuantity !== -1 && row[idxQuantity]) ? (parseInt(String(row[idxQuantity]).replace(/[^\d]/g, '')) || 1) : 1,
                 price: (idxPrice !== -1 && row[idxPrice]) ? (parseFloat(String(row[idxPrice]).replace(/[^\d.-]/g, '')) || 0) : 0,
                 statut: Statut.NonDefini, // Default status
                 assignedUserId: null,
@@ -519,6 +525,7 @@ const AppRouter: React.FC = () => {
                     customerPhone: `2126${Math.floor(Math.random() * 100000000)}`,
                     address: `Adresse Démo, Casablanca`,
                     product: randomProduct ? randomProduct.name : 'Produit Démo',
+                    quantity: 1,
                     price: randomProduct ? randomProduct.sellingPrice : 199,
                     statut: Statut.NonDefini,
                     assignedUserId: null,

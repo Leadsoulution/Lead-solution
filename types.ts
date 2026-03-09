@@ -53,6 +53,7 @@ export interface Order {
   customerPhone: string;
   address: string;
   price: number;
+  quantity: number;
   product: string;
   statut: Statut;
   assignedUserId: string | null;
@@ -76,6 +77,8 @@ export interface Product {
   showInOrders?: boolean;
   discount?: number;
   category?: string;
+  isPack?: boolean;
+  packProducts?: { productId: string; quantity: number }[];
   customFields?: Record<string, string>;
 }
 

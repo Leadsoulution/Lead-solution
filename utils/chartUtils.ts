@@ -67,10 +67,11 @@ export const filterAndAggregateData = (
             // Match by time value
             const dayData = data.find(d => d.date.getTime() === orderDate.getTime());
             if (dayData) {
-                if (order.commandeRetour === CommandeRetour.Retourner) dayData.returned++;
-                else if (order.livraison === Livraison.Livre) dayData.delivered++;
-                else dayData.onDelivery++;
-                dayData.sales += order.price;
+                const qty = order.quantity || 1;
+                if (order.commandeRetour === CommandeRetour.Retourner) dayData.returned += qty;
+                else if (order.livraison === Livraison.Livre) dayData.delivered += qty;
+                else dayData.onDelivery += qty;
+                dayData.sales += (order.price * qty);
             }
         });
         // Clean up data structure for Recharts
@@ -83,10 +84,11 @@ export const filterAndAggregateData = (
         filteredOrders.forEach(order => {
             const day = new Date(order.date).getDate() - 1;
             if (data[day]) {
-                if (order.commandeRetour === CommandeRetour.Retourner) data[day].returned++;
-                else if (order.livraison === Livraison.Livre) data[day].delivered++;
-                else data[day].onDelivery++;
-                data[day].sales += order.price;
+                const qty = order.quantity || 1;
+                if (order.commandeRetour === CommandeRetour.Retourner) data[day].returned += qty;
+                else if (order.livraison === Livraison.Livre) data[day].delivered += qty;
+                else data[day].onDelivery += qty;
+                data[day].sales += (order.price * qty);
             }
         });
         return data;
@@ -98,10 +100,11 @@ export const filterAndAggregateData = (
         filteredOrders.forEach(order => {
             const monthIndex = new Date(order.date).getMonth();
             if (data[monthIndex]) {
-                if (order.commandeRetour === CommandeRetour.Retourner) data[monthIndex].returned++;
-                else if (order.livraison === Livraison.Livre) data[monthIndex].delivered++;
-                else data[monthIndex].onDelivery++;
-                data[monthIndex].sales += order.price;
+                const qty = order.quantity || 1;
+                if (order.commandeRetour === CommandeRetour.Retourner) data[monthIndex].returned += qty;
+                else if (order.livraison === Livraison.Livre) data[monthIndex].delivered += qty;
+                else data[monthIndex].onDelivery += qty;
+                data[monthIndex].sales += (order.price * qty);
             }
         });
         return data;

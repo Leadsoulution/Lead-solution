@@ -357,7 +357,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
             const delimiter = firstLine.includes(';') ? ';' : ',';
 
             const header = firstLine.split(delimiter).map(h => h.trim().replace(/"/g, ''));
-            const expectedHeaders = ['customerName', 'customerPhone', 'address', 'price', 'product', 'noteClient'];
+            const expectedHeaders = ['customerName', 'customerPhone', 'address', 'price', 'product', 'noteClient', 'quantity'];
             
             // Loose matching for headers (case insensitive)
             const headerMap = expectedHeaders.map(h => header.findIndex(head => head.toLowerCase().includes(h.toLowerCase())));
@@ -367,7 +367,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                  console.warn("Headers missing, trying positional assumption.");
             }
             
-            // Map indices or fallback to 0,1,2,3,4,5
+            // Map indices or fallback to 0,1,2,3,4,5,6
             const idx = {
                 name: headerMap[0] !== -1 ? headerMap[0] : 0,
                 phone: headerMap[1] !== -1 ? headerMap[1] : 1,
@@ -375,6 +375,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 price: headerMap[3] !== -1 ? headerMap[3] : 3,
                 prod: headerMap[4] !== -1 ? headerMap[4] : 4,
                 note: headerMap[5] !== -1 ? headerMap[5] : 5,
+                qty: headerMap[6] !== -1 ? headerMap[6] : 6,
             };
 
             const newOrders: Order[] = rows.slice(1).map((rowStr, index) => {
@@ -389,6 +390,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 
                 const productName = matchedProduct ? matchedProduct.name : productInput;
                 const productPrice = matchedProduct ? matchedProduct.sellingPrice : parseFloat(values[idx.price]?.replace(',', '.') || '0');
+                const quantity = parseInt(values[idx.qty] || '1', 10);
 
                 return {
                     id: `import-${Date.now()}-${index}`,
@@ -397,6 +399,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                     customerPhone: values[idx.phone] || '',
                     address: values[idx.addr] || '',
                     price: isNaN(productPrice) ? 0 : productPrice,
+                    quantity: isNaN(quantity) ? 1 : quantity,
                     product: productName,
                     noteClient: values[idx.note] || '',
                     platform: Platform.Manual,
@@ -507,7 +510,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     }
   
     const headers = [
-      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Produit', 'Prix',
+      'ID', 'Date', 'Client', 'Téléphone', 'Adresse', 'Produit', 'Quantité', 'Prix',
       'Confirmation', 'Utilisateur assigné', 'Note du Client', 'Ramassage', 'Livraison', 
       'Remboursement', 'Commande retour', 'Appels'
     ];
@@ -530,6 +533,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         escapeCSV(order.customerPhone),
         escapeCSV(order.address),
         escapeCSV(order.product),
+        escapeCSV(order.quantity || 1),
         escapeCSV(order.price),
         escapeCSV(order.statut),
         escapeCSV(assignedUser),
@@ -775,6 +779,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.info}`}>Téléphone</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Adresse</th>
                 <th className={`p-2 border ${headerStyles.info}`}>PRODUIT</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Quantité</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Prix</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Appel / fois</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Confirmation</th>
@@ -829,6 +834,17 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                                 placeholder="Nom ou ID produit..."
                               />
                         </div>
+                      </td>
+                      <td className="p-1 border min-w-[80px]">
+                        <input
+                          type="number"
+                          value={order.quantity || 1}
+                          onChange={(e) => handleUpdateOrder(order.id, 'quantity', parseInt(e.target.value) || 1)}
+                          className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs text-right disabled:opacity-50 disabled:cursor-not-allowed"
+                          disabled={!isEditable}
+                          min="1"
+                          step="1"
+                        />
                       </td>
                       <td className="p-1 border min-w-[100px]">
                         <input

@@ -18,6 +18,7 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     customerPhone: '',
     address: '',
     price: 0,
+    quantity: 1,
     product: '',
     noteClient: '',
   };
@@ -35,7 +36,15 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
         setFormData(prev => ({
             ...prev,
             product: value,
-            price: selectedProduct ? selectedProduct.sellingPrice : prev.price
+            price: selectedProduct ? selectedProduct.sellingPrice * prev.quantity : prev.price
+        }));
+    } else if (name === 'quantity') {
+        const qty = parseInt(value) || 1;
+        const selectedProduct = products.find(p => p.name === formData.product);
+        setFormData(prev => ({
+            ...prev,
+            quantity: qty,
+            price: selectedProduct ? selectedProduct.sellingPrice * qty : prev.price
         }));
     } else {
         setFormData(prev => ({
@@ -47,8 +56,8 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formData.customerName || !formData.product || formData.price <= 0) {
-      setError('Veuillez remplir tous les champs obligatoires (Client, Produit, Prix).');
+    if (!formData.customerName || !formData.product || formData.price <= 0 || formData.quantity <= 0) {
+      setError('Veuillez remplir tous les champs obligatoires (Client, Produit, Quantité, Prix).');
       return;
     }
     setError('');
@@ -92,6 +101,10 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
                 <option key={p.id} value={p.name}>[{p.id}] {p.name}</option>
               ))}
             </select>
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Quantité *</label>
+            <input type="number" name="quantity" value={formData.quantity} onChange={handleChange} className="w-full mt-1 input-style" required min="1" step="1" />
           </div>
           <div>
             <label className="block text-sm font-medium">Prix *</label>

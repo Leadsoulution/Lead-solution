@@ -96,10 +96,10 @@ const Clients: React.FC<ClientsProps> = ({ clients, setClients, orders }) => {
   const clientProfiles = useMemo(() => {
     return clients.map(client => {
       const clientOrders = orders.filter(o => o.customerPhone === client.phone);
-      const totalSpent = clientOrders.reduce((sum, o) => sum + o.price, 0);
+      const totalSpent = clientOrders.reduce((sum, o) => sum + (o.price * (o.quantity || 1)), 0);
       return {
         ...client,
-        totalOrders: clientOrders.length,
+        totalOrders: clientOrders.reduce((sum, o) => sum + (o.quantity || 1), 0),
         totalSpent,
         orders: clientOrders.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
       };

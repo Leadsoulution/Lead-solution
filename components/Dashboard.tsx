@@ -238,7 +238,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
         o.livraison !== Livraison.Livre
     ).length;
 
-    const averageOrderValue = totalRevenue / totalShipments;
+    const averageOrderValue = totalShipments > 0 ? totalRevenue / totalShipments : 0;
     
     return {
       totalShipments,
@@ -247,9 +247,9 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
       completedOrders,
       returnedOrders,
       averageOrderValue,
-      activePercentage: `${(activeShipments / totalShipments * 100).toFixed(0)}% of total`,
-      completedPercentage: `${(completedOrders / totalShipments * 100).toFixed(0)}% of total`,
-      returnedPercentage: `${(returnedOrders / totalShipments * 100).toFixed(0)}% of total`
+      activePercentage: totalShipments > 0 ? `${(activeShipments / totalShipments * 100).toFixed(0)}% of total` : '0% of total',
+      completedPercentage: totalShipments > 0 ? `${(completedOrders / totalShipments * 100).toFixed(0)}% of total` : '0% of total',
+      returnedPercentage: totalShipments > 0 ? `${(returnedOrders / totalShipments * 100).toFixed(0)}% of total` : '0% of total'
     };
   }, [confirmedOrders, filteredOrders]);
 
@@ -289,7 +289,7 @@ const Dashboard: React.FC<DashboardProps> = ({ orders }) => {
     confirmedOrders.forEach(order => {
         if (!checkByProduct[order.product]) checkByProduct[order.product] = { total: 0, count: 0 };
         checkByProduct[order.product].total += order.price;
-        checkByProduct[order.product].count++;
+        checkByProduct[order.product].count += 1;
     });
     
     return Object.entries(checkByProduct)

@@ -121,26 +121,82 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
   }, [notification]);
 
   const productsWithStock = useMemo(() => {
-    return products.map(product => {
+    // First pass: calculate stock for simple products
+    const simpleProductsStock = new Map<string, { stockReel: number, stockDisponible: number }>();
+    
+    const baseProducts = products.map(product => {
+      // Calculate how many of this product were sold individually
       const ordersForProduct = orders.filter(order => order.product === product.name);
+      
+      // Calculate how many of this product were sold as part of a pack
+      const packOrders = orders.filter(order => {
+        const packProduct = products.find(p => p.name === order.product && p.isPack);
+        return packProduct?.packProducts?.some(pp => pp.productId === product.id);
+      });
 
-      const deliveredCount = ordersForProduct.filter(
+      let deliveredCount = ordersForProduct.filter(
         o => o.livraison === Livraison.Livre
-      ).length;
-      const stockReel = product.initialStock - deliveredCount;
-
-      const unavailableCount = ordersForProduct.filter(
+      ).reduce((sum, o) => sum + (o.quantity || 1), 0);
+      
+      let unavailableCount = ordersForProduct.filter(
         o => o.statut === Statut.Confirme && 
              o.livraison !== Livraison.Annule && 
              o.commandeRetour !== CommandeRetour.Retourner
-      ).length;
+      ).reduce((sum, o) => sum + (o.quantity || 1), 0);
+
+      // Add quantities from packs
+      packOrders.forEach(order => {
+        const packProduct = products.find(p => p.name === order.product && p.isPack);
+        const packItem = packProduct?.packProducts?.find(pp => pp.productId === product.id);
+        if (packItem) {
+          const qtyInPack = packItem.quantity * (order.quantity || 1);
+          if (order.livraison === Livraison.Livre) {
+            deliveredCount += qtyInPack;
+          }
+          if (order.statut === Statut.Confirme && order.livraison !== Livraison.Annule && order.commandeRetour !== CommandeRetour.Retourner) {
+            unavailableCount += qtyInPack;
+          }
+        }
+      });
+
+      const stockReel = product.initialStock - deliveredCount;
       const stockDisponible = product.initialStock - unavailableCount;
+
+      simpleProductsStock.set(product.id, { stockReel, stockDisponible });
 
       return {
         ...product,
         stockReel,
         stockDisponible,
       };
+    });
+
+    // Second pass: calculate stock for packs based on their components
+    return baseProducts.map(product => {
+      if (product.isPack && product.packProducts && product.packProducts.length > 0) {
+        let minStockReel = Infinity;
+        let minStockDisponible = Infinity;
+
+        product.packProducts.forEach(pp => {
+          const componentStock = simpleProductsStock.get(pp.productId);
+          if (componentStock) {
+            const possibleReel = Math.floor(componentStock.stockReel / pp.quantity);
+            const possibleDisponible = Math.floor(componentStock.stockDisponible / pp.quantity);
+            if (possibleReel < minStockReel) minStockReel = possibleReel;
+            if (possibleDisponible < minStockDisponible) minStockDisponible = possibleDisponible;
+          } else {
+            minStockReel = 0;
+            minStockDisponible = 0;
+          }
+        });
+
+        return {
+          ...product,
+          stockReel: minStockReel === Infinity ? 0 : minStockReel,
+          stockDisponible: minStockDisponible === Infinity ? 0 : minStockDisponible,
+        };
+      }
+      return product;
     });
   }, [orders, products]);
 
@@ -452,6 +508,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
               <tr>
                 <th className="px-2 py-3">Photo</th>
                 <th className="px-2 py-3">Code Article</th>
+                <th className="px-2 py-3">Type</th>
                 <th className="px-2 py-3">Nom du Produit</th>
                 <th className="px-2 py-3 text-right">Stock Initial</th>
                 <th className="px-2 py-3 text-right">Stock Réel</th>
@@ -478,8 +535,31 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
                       }
                     </td>
                     <td className="px-2 py-2 font-mono text-muted-foreground min-w-[100px]">{product.id}</td>
+                    <td className="px-2 py-2 min-w-[80px]">
+                      {product.isPack ? (
+                        <span className="px-2 py-1 bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300 rounded-full text-xs font-medium">
+                          Pack
+                        </span>
+                      ) : (
+                        <span className="px-2 py-1 bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300 rounded-full text-xs font-medium">
+                          Simple
+                        </span>
+                      )}
+                    </td>
                     <td className="px-2 py-2 font-medium min-w-[200px]">
-                      {isEditing ? <input type="text" name="name" value={editedProductData.name || ''} onChange={handleEditInputChange} className={inputClass} /> : product.name}
+                      {isEditing ? <input type="text" name="name" value={editedProductData.name || ''} onChange={handleEditInputChange} className={inputClass} /> : (
+                        <div>
+                          {product.name}
+                          {product.isPack && product.packProducts && (
+                            <div className="text-xs text-muted-foreground mt-1">
+                              Contient: {product.packProducts.map(pp => {
+                                const p = products.find(prod => prod.id === pp.productId);
+                                return `${pp.quantity}x ${p ? p.name : pp.productId}`;
+                              }).join(', ')}
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </td>
                     <td className="px-2 py-2 text-right min-w-[100px]">
                       {isEditing ? <input type="number" name="initialStock" value={editedProductData.initialStock || 0} onChange={handleEditInputChange} className={inputNumberClass} /> : product.initialStock}
@@ -541,6 +621,7 @@ const Products: React.FC<ProductsProps> = ({ orders, products, setProducts }) =>
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
         onAddProduct={handleAddProduct}
+        products={products}
       />
     </div>
   );

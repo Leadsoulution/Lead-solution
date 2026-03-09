@@ -17,7 +17,7 @@ export const api = {
         const stored = localStorage.getItem('orders');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/orders.php`);
+    const response = await fetch(`${API_BASE_URL}/orders_get.php`);
     return handleResponse<Order[]>(response);
   },
 
@@ -29,7 +29,7 @@ export const api = {
         localStorage.setItem('orders', JSON.stringify(orders));
         return order;
     }
-    const response = await fetch(`${API_BASE_URL}/orders.php`, {
+    const response = await fetch(`${API_BASE_URL}/orders_add.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
@@ -45,8 +45,8 @@ export const api = {
         localStorage.setItem('orders', JSON.stringify(orders));
         return;
     }
-    await fetch(`${API_BASE_URL}/orders.php`, {
-      method: 'PUT',
+    await fetch(`${API_BASE_URL}/orders_update.php`, {
+      method: 'POST', // Changed to POST as separate update files usually expect POST
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     });
@@ -60,8 +60,8 @@ export const api = {
         localStorage.setItem('orders', JSON.stringify(orders));
         return;
     }
-    await fetch(`${API_BASE_URL}/orders.php?id=${id}`, {
-      method: 'DELETE',
+    await fetch(`${API_BASE_URL}/orders_delete.php?id=${id}`, {
+      method: 'POST', // Changed to POST for compatibility
     });
   },
 
@@ -71,7 +71,7 @@ export const api = {
         const stored = localStorage.getItem('products');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/products.php`);
+    const response = await fetch(`${API_BASE_URL}/products_get.php`);
     return handleResponse<Product[]>(response);
   },
 
@@ -83,7 +83,7 @@ export const api = {
         localStorage.setItem('products', JSON.stringify(products));
         return product;
     }
-    const response = await fetch(`${API_BASE_URL}/products.php`, {
+    const response = await fetch(`${API_BASE_URL}/products_add.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
@@ -99,8 +99,8 @@ export const api = {
         localStorage.setItem('products', JSON.stringify(products));
         return;
     }
-    await fetch(`${API_BASE_URL}/products.php`, {
-      method: 'PUT',
+    await fetch(`${API_BASE_URL}/products_update.php`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
     });
@@ -114,8 +114,8 @@ export const api = {
         localStorage.setItem('products', JSON.stringify(products));
         return;
     }
-    await fetch(`${API_BASE_URL}/products.php?id=${id}`, {
-      method: 'DELETE',
+    await fetch(`${API_BASE_URL}/products_delete.php?id=${id}`, {
+      method: 'POST',
     });
   },
 
@@ -125,7 +125,7 @@ export const api = {
         const stored = localStorage.getItem('clients');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/clients.php`);
+    const response = await fetch(`${API_BASE_URL}/clients_get.php`);
     return handleResponse<Client[]>(response);
   },
 
@@ -137,7 +137,7 @@ export const api = {
         localStorage.setItem('clients', JSON.stringify(clients));
         return client;
     }
-    const response = await fetch(`${API_BASE_URL}/clients.php`, {
+    const response = await fetch(`${API_BASE_URL}/clients_add.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(client),
@@ -153,8 +153,8 @@ export const api = {
         localStorage.setItem('clients', JSON.stringify(clients));
         return;
     }
-    await fetch(`${API_BASE_URL}/clients.php`, {
-      method: 'PUT',
+    await fetch(`${API_BASE_URL}/clients_update.php`, {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(client),
     });
@@ -168,8 +168,8 @@ export const api = {
         localStorage.setItem('clients', JSON.stringify(clients));
         return;
     }
-    await fetch(`${API_BASE_URL}/clients.php?id=${id}`, {
-      method: 'DELETE',
+    await fetch(`${API_BASE_URL}/clients_delete.php?id=${id}`, {
+      method: 'POST',
     });
   },
 
@@ -179,7 +179,7 @@ export const api = {
         const stored = localStorage.getItem('settings');
         return stored ? JSON.parse(stored) : {};
     }
-    const response = await fetch(`${API_BASE_URL}/settings.php`);
+    const response = await fetch(`${API_BASE_URL}/settings_get.php`);
     return handleResponse<any>(response);
   },
 
@@ -188,7 +188,7 @@ export const api = {
         localStorage.setItem('settings', JSON.stringify(settings));
         return;
     }
-    await fetch(`${API_BASE_URL}/settings.php`, {
+    await fetch(`${API_BASE_URL}/settings_update.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
