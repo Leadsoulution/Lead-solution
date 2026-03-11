@@ -196,13 +196,39 @@ export const api = {
   },
   
   // Users
+  login: async (username: string, password: string): Promise<User> => {
+      if (USE_MOCK_DATA) {
+          const stored = localStorage.getItem('users');
+          const users = stored ? JSON.parse(stored) : [];
+          const user = users.find((u: User) => u.username === username && u.password === password);
+          if (!user) throw new Error('Invalid credentials');
+          return user;
+      }
+      const response = await fetch(`${API_BASE_URL}/login.php`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username, password }),
+      });
+      const user = await handleResponse<any>(response);
+      return {
+          ...user,
+          assignedProductIds: user.assignedProductIds || [],
+          permissions: user.permissions || []
+      };
+  },
+
   getUsers: async (): Promise<User[]> => {
       if (USE_MOCK_DATA) {
           const stored = localStorage.getItem('users');
           return stored ? JSON.parse(stored) : [];
       }
       const response = await fetch(`${API_BASE_URL}/users.php`);
-      return handleResponse<User[]>(response);
+      const users = await handleResponse<any[]>(response);
+      return users.map(u => ({
+          ...u,
+          assignedProductIds: u.assigned_product_ids || u.assignedProductIds || [],
+          permissions: u.permissions || []
+      }));
   },
   
   createUser: async (user: User): Promise<User> => {

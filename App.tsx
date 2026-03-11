@@ -37,6 +37,10 @@ const AppRouter: React.FC = () => {
     return View.Dashboard;
   });
 
+  if (!currentUser) {
+    return <Login />;
+  }
+
   // Load Orders from API
   const [orders, setOrders] = useState<Order[]>([]);
   // Load Products from API

@@ -73,17 +73,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   }, [users, currentUser]);
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    // In a real app with a backend, we should hit a /login endpoint.
-    // For now, we check against the loaded users.
-    // WARNING: This assumes the API returns passwords (which it shouldn't in production).
-    // If the API returns hashed passwords, this check will fail unless we hash the input here too.
-    const user = users.find(u => u.username === username && u.password === password);
-    if (user) {
-      setCurrentUser(user);
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      return true;
+    try {
+      const user = await api.login(username, password);
+      if (user) {
+        setCurrentUser(user);
+        localStorage.setItem('currentUser', JSON.stringify(user));
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("Login failed", error);
+      return false;
     }
-    return false;
   };
 
   const logout = () => {
