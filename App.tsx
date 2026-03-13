@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
 import Orders from './components/Orders';
@@ -36,6 +36,21 @@ const AppRouter: React.FC = () => {
     }
     return View.Dashboard;
   });
+
+  const prevUserRef = useRef<User | null>(null);
+
+  useEffect(() => {
+    if (currentUser && !prevUserRef.current) {
+      if (currentUser.permissions && currentUser.permissions.length > 0) {
+        setView(currentUser.permissions[0]);
+      } else if (currentUser.role === Role.Confirmation) {
+        setView(View.Orders);
+      } else {
+        setView(View.Dashboard);
+      }
+    }
+    prevUserRef.current = currentUser;
+  }, [currentUser]);
 
   if (!currentUser) {
     return <Login />;
@@ -219,7 +234,7 @@ const AppRouter: React.FC = () => {
   const fetchWooCommerceOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
     // ... (keep existing implementation)
     try {
-        const response = await fetch('/api/proxy/woocommerce', {
+        const response = await fetch('/api/proxy_woocommerce.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -271,7 +286,7 @@ const AppRouter: React.FC = () => {
 
   const fetchShopifyOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
     try {
-        const response = await fetch('/api/proxy/shopify', {
+        const response = await fetch('/api/proxy_shopify.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -321,7 +336,7 @@ const AppRouter: React.FC = () => {
 
   const fetchYouCanOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
     try {
-        const response = await fetch('/api/proxy/youcan', {
+        const response = await fetch('/api/proxy_youcan.php', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
@@ -367,7 +382,7 @@ const AppRouter: React.FC = () => {
 
   const fetchGoogleSheetsOrders = async (settings: IntegrationSettings): Promise<Order[]> => {
     try {
-        const response = await fetch('/api/proxy/googlesheets', {
+        const response = await fetch('/api/proxy_googlesheets.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({

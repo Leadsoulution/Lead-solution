@@ -17,7 +17,7 @@ export const api = {
         const stored = localStorage.getItem('orders');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/orders_get.php`);
+    const response = await fetch(`${API_BASE_URL}/orders.php`);
     return handleResponse<Order[]>(response);
   },
 
@@ -29,12 +29,13 @@ export const api = {
         localStorage.setItem('orders', JSON.stringify(orders));
         return order;
     }
-    const response = await fetch(`${API_BASE_URL}/orders_add.php`, {
+    const response = await fetch(`${API_BASE_URL}/orders.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     });
-    return handleResponse<Order>(response);
+    await handleResponse(response);
+    return order;
   },
 
   updateOrder: async (order: Order): Promise<void> => {
@@ -45,11 +46,12 @@ export const api = {
         localStorage.setItem('orders', JSON.stringify(orders));
         return;
     }
-    await fetch(`${API_BASE_URL}/orders_update.php`, {
-      method: 'POST', // Changed to POST as separate update files usually expect POST
+    const response = await fetch(`${API_BASE_URL}/orders.php`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(order),
     });
+    await handleResponse(response);
   },
 
   deleteOrder: async (id: string): Promise<void> => {
@@ -60,9 +62,10 @@ export const api = {
         localStorage.setItem('orders', JSON.stringify(orders));
         return;
     }
-    await fetch(`${API_BASE_URL}/orders_delete.php?id=${id}`, {
-      method: 'POST', // Changed to POST for compatibility
+    const response = await fetch(`${API_BASE_URL}/orders.php?id=${id}`, {
+      method: 'DELETE',
     });
+    await handleResponse(response);
   },
 
   // Products
@@ -71,7 +74,7 @@ export const api = {
         const stored = localStorage.getItem('products');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/products_get.php`);
+    const response = await fetch(`${API_BASE_URL}/products.php`);
     return handleResponse<Product[]>(response);
   },
 
@@ -83,12 +86,13 @@ export const api = {
         localStorage.setItem('products', JSON.stringify(products));
         return product;
     }
-    const response = await fetch(`${API_BASE_URL}/products_add.php`, {
+    const response = await fetch(`${API_BASE_URL}/products.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
     });
-    return handleResponse<Product>(response);
+    await handleResponse(response);
+    return product;
   },
 
   updateProduct: async (product: Product): Promise<void> => {
@@ -99,11 +103,12 @@ export const api = {
         localStorage.setItem('products', JSON.stringify(products));
         return;
     }
-    await fetch(`${API_BASE_URL}/products_update.php`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/products.php`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(product),
     });
+    await handleResponse(response);
   },
 
   deleteProduct: async (id: string): Promise<void> => {
@@ -114,9 +119,10 @@ export const api = {
         localStorage.setItem('products', JSON.stringify(products));
         return;
     }
-    await fetch(`${API_BASE_URL}/products_delete.php?id=${id}`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/products.php?id=${id}`, {
+      method: 'DELETE',
     });
+    await handleResponse(response);
   },
 
   // Clients
@@ -125,7 +131,7 @@ export const api = {
         const stored = localStorage.getItem('clients');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/clients_get.php`);
+    const response = await fetch(`${API_BASE_URL}/clients.php`);
     return handleResponse<Client[]>(response);
   },
 
@@ -137,12 +143,13 @@ export const api = {
         localStorage.setItem('clients', JSON.stringify(clients));
         return client;
     }
-    const response = await fetch(`${API_BASE_URL}/clients_add.php`, {
+    const response = await fetch(`${API_BASE_URL}/clients.php`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(client),
     });
-    return handleResponse<Client>(response);
+    await handleResponse(response);
+    return client;
   },
 
   updateClient: async (client: Client): Promise<void> => {
@@ -153,11 +160,12 @@ export const api = {
         localStorage.setItem('clients', JSON.stringify(clients));
         return;
     }
-    await fetch(`${API_BASE_URL}/clients_update.php`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/clients.php`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(client),
     });
+    await handleResponse(response);
   },
 
   deleteClient: async (id: string): Promise<void> => {
@@ -168,9 +176,10 @@ export const api = {
         localStorage.setItem('clients', JSON.stringify(clients));
         return;
     }
-    await fetch(`${API_BASE_URL}/clients_delete.php?id=${id}`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/clients.php?id=${id}`, {
+      method: 'DELETE',
     });
+    await handleResponse(response);
   },
 
   // Settings
@@ -179,7 +188,7 @@ export const api = {
         const stored = localStorage.getItem('settings');
         return stored ? JSON.parse(stored) : {};
     }
-    const response = await fetch(`${API_BASE_URL}/settings_get.php`);
+    const response = await fetch(`${API_BASE_URL}/settings.php`);
     return handleResponse<any>(response);
   },
 
@@ -188,11 +197,12 @@ export const api = {
         localStorage.setItem('settings', JSON.stringify(settings));
         return;
     }
-    await fetch(`${API_BASE_URL}/settings_update.php`, {
-      method: 'POST',
+    const response = await fetch(`${API_BASE_URL}/settings.php`, {
+      method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(settings),
     });
+    await handleResponse(response);
   },
   
   // Users
@@ -244,7 +254,8 @@ export const api = {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(user),
       });
-      return handleResponse<User>(response);
+      await handleResponse(response);
+      return user;
   },
   
   updateUser: async (user: User): Promise<void> => {
@@ -255,11 +266,12 @@ export const api = {
           localStorage.setItem('users', JSON.stringify(users));
           return;
       }
-      await fetch(`${API_BASE_URL}/users.php`, {
+      const response = await fetch(`${API_BASE_URL}/users.php`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(user),
       });
+      await handleResponse(response);
   },
   
   deleteUser: async (id: string): Promise<void> => {
@@ -270,9 +282,10 @@ export const api = {
           localStorage.setItem('users', JSON.stringify(users));
           return;
       }
-      await fetch(`${API_BASE_URL}/users.php?id=${id}`, {
+      const response = await fetch(`${API_BASE_URL}/users.php?id=${id}`, {
           method: 'DELETE',
       });
+      await handleResponse(response);
   },
 
   // Logs
@@ -293,10 +306,14 @@ export const api = {
         localStorage.setItem('systemLogs', JSON.stringify(logs));
         return;
     }
-    await fetch(`${API_BASE_URL}/logs.php`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(log),
-    });
+    try {
+      await fetch(`${API_BASE_URL}/logs.php`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(log),
+      });
+    } catch (e) {
+      console.warn("Could not save log to backend", e);
+    }
   }
 };
