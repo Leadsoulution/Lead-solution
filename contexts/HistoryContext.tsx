@@ -22,7 +22,14 @@ export const HistoryProvider: React.FC<{ children: ReactNode }> = ({ children })
         console.error("Failed to fetch logs", error);
       }
     };
+    
     fetchLogs();
+    
+    const intervalId = setInterval(() => {
+        fetchLogs();
+    }, 5000);
+
+    return () => clearInterval(intervalId);
   }, []);
 
   const addLog = async (entry: Omit<LogEntry, 'id' | 'timestamp'>) => {

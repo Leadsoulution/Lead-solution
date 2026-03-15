@@ -21,8 +21,9 @@ import AIAnalysis from './components/AIAnalysis';
 import { HistoryProvider } from './contexts/HistoryContext';
 import History from './components/History';
 import { api } from './src/services/api';
+import { USE_MOCK_DATA } from './src/config';
 
-const AppRouter: React.FC = () => {
+const AuthenticatedApp: React.FC = () => {
   const { currentUser } = useAuth();
   const { integrations } = useIntegrations();
   const [isLoading, setIsLoading] = useState(false);
@@ -52,10 +53,6 @@ const AppRouter: React.FC = () => {
     prevUserRef.current = currentUser;
   }, [currentUser]);
 
-  if (!currentUser) {
-    return <Login />;
-  }
-
   // Load Orders from API
   const [orders, setOrders] = useState<Order[]>([]);
   // Load Products from API
@@ -64,28 +61,50 @@ const AppRouter: React.FC = () => {
   const [clients, setClients] = useState<Client[]>([]);
 
   useEffect(() => {
-      const fetchData = async () => {
+      const fetchData = async (showLoading = true) => {
+          if (showLoading) setIsLoading(true);
+          
           try {
-              setIsLoading(true);
-              const [fetchedOrders, fetchedProducts, fetchedClients] = await Promise.all([
-                  api.getOrders(),
-                  api.getProducts(),
-                  api.getClients()
-              ]);
-              setOrders(fetchedOrders);
-              setProducts(fetchedProducts);
-              setClients(fetchedClients);
-          } catch (error) {
-              console.error("Failed to fetch initial data", error);
-              // Fallback to mock data if API fails (or if USE_MOCK_DATA is true and localStorage is empty)
-              setOrders(JSON.parse(JSON.stringify(mockOrders)));
-              setProducts(JSON.parse(JSON.stringify(mockProducts)));
-              setClients(JSON.parse(JSON.stringify(mockClients)));
+              // Fetch Orders
+              try {
+                  const fetchedOrders = await api.getOrders();
+                  setOrders(fetchedOrders);
+              } catch (e) {
+                  console.error("Failed to fetch orders", e);
+                  if (showLoading && USE_MOCK_DATA) setOrders(JSON.parse(JSON.stringify(mockOrders)));
+              }
+
+              // Fetch Products
+              try {
+                  const fetchedProducts = await api.getProducts();
+                  setProducts(fetchedProducts);
+              } catch (e) {
+                  console.error("Failed to fetch products", e);
+                  if (showLoading && USE_MOCK_DATA) setProducts(JSON.parse(JSON.stringify(mockProducts)));
+              }
+
+              // Fetch Clients
+              try {
+                  const fetchedClients = await api.getClients();
+                  setClients(fetchedClients);
+              } catch (e) {
+                  console.error("Failed to fetch clients", e);
+                  if (showLoading && USE_MOCK_DATA) setClients(JSON.parse(JSON.stringify(mockClients)));
+              }
           } finally {
-              setIsLoading(false);
+              if (showLoading) setIsLoading(false);
           }
       };
-      fetchData();
+      
+      // Initial fetch with loading indicator
+      fetchData(true);
+
+      // Poll every 5 seconds for real-time updates across browsers
+      const intervalId = setInterval(() => {
+          fetchData(false);
+      }, 5000);
+
+      return () => clearInterval(intervalId);
   }, []);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -675,6 +694,14 @@ const AppRouter: React.FC = () => {
       </main>
     </div>
   );
+};
+
+const AppRouter: React.FC = () => {
+  const { currentUser } = useAuth();
+  if (!currentUser) {
+    return <Login />;
+  }
+  return <AuthenticatedApp />;
 };
 
 // ... (inside App component)
