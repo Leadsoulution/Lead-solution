@@ -142,8 +142,14 @@ export const CustomizationProvider: React.FC<{ children: ReactNode }> = ({ child
                     } else if (s.setting_key === 'appCurrency') {
                         setCurrency(s.setting_value as Currency);
                     } else if (s.setting_key === 'customStatuses') {
-                        const parsed = JSON.parse(s.setting_value);
-                        setCustomStatuses(parsed);
+                        try {
+                            const parsed = JSON.parse(s.setting_value);
+                            if (typeof parsed === 'object' && parsed !== null) {
+                                setCustomStatuses(parsed);
+                            }
+                        } catch (e) {
+                            console.warn(`Invalid customStatuses in DB, resetting to default.`);
+                        }
                     } else if (s.setting_key === 'geminiApiKey') {
                         setGeminiApiKey(s.setting_value);
                     }

@@ -453,18 +453,28 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     setNotification({ type: 'success', message: 'Produit ajouté avec succès !' });
   };
   
-  const handleDeleteOrder = (orderId: string) => {
+  const handleDeleteOrder = async (orderId: string) => {
     if (window.confirm('Êtes-vous sûr de vouloir supprimer cette commande ?')) {
+        // Optimistic update
+        const originalOrders = [...orders];
         setOrders(prevOrders => prevOrders.filter(order => order.id !== orderId));
-        addLog({
-            userId: currentUser?.id || 'unknown',
-            username: currentUser?.username || 'Unknown',
-            action: 'Delete Order',
-            details: `Deleted order ${orderId}`,
-            targetId: orderId,
-            targetType: 'Order',
-        });
-        setNotification({ type: 'success', message: 'Commande supprimée avec succès.' });
+        
+        try {
+            await api.deleteOrder(orderId);
+            addLog({
+                userId: currentUser?.id || 'unknown',
+                username: currentUser?.username || 'Unknown',
+                action: 'Delete Order',
+                details: `Deleted order ${orderId}`,
+                targetId: orderId,
+                targetType: 'Order',
+            });
+            setNotification({ type: 'success', message: 'Commande supprimée avec succès.' });
+        } catch (error) {
+            console.error("Failed to delete order", error);
+            setOrders(originalOrders); // Revert on failure
+            setNotification({ type: 'error', message: 'Erreur lors de la suppression de la commande.' });
+        }
     }
   };
 

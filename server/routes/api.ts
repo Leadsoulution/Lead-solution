@@ -120,7 +120,7 @@ router.post(['/clients', '/clients.php'], asyncHandler(async (req, res) => {
   const values = Object.values(client);
   const placeholders = keys.map(() => '?').join(', ');
   
-  db.prepare(`INSERT INTO clients (${keys.join(', ')}) VALUES (${placeholders})`).run(...values);
+  db.prepare(`INSERT OR IGNORE INTO clients (${keys.join(', ')}) VALUES (${placeholders})`).run(...values);
   res.status(201).json(req.body);
 }));
 
