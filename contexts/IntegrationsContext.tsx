@@ -54,15 +54,18 @@ export const IntegrationsProvider: React.FC<{ children: ReactNode }> = ({ childr
       try {
         const settings = await api.getSettings();
         if (Array.isArray(settings)) {
-            const integrationSetting = settings.find((s: Setting) => s.setting_key === 'platformIntegrations');
+            const integrationSetting = settings.find((s: any) => s.setting_key === 'platformIntegrations');
             if (integrationSetting) {
+                const parsedValue = typeof integrationSetting.setting_value === 'string' 
+                    ? JSON.parse(integrationSetting.setting_value) 
+                    : integrationSetting.setting_value;
                 setIntegrations({
                     ...initialIntegrationsState,
-                    ...JSON.parse(integrationSetting.setting_value)
+                    ...parsedValue
                 });
             }
             
-            const webhookIdSetting = settings.find((s: Setting) => s.setting_key === 'webhook_identifier');
+            const webhookIdSetting = settings.find((s: any) => s.setting_key === 'webhook_identifier');
             if (webhookIdSetting) {
                 setWebhookIdentifier(webhookIdSetting.setting_value);
             } else {
