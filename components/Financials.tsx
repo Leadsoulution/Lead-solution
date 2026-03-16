@@ -110,13 +110,15 @@ const Financials: React.FC<FinancialsProps> = ({ orders, products }) => {
             settings.forEach((s: Setting) => {
                 if (s.setting_key === 'financialCalculatorData') {
                     try {
-                        setCalculatorData(JSON.parse(s.setting_value));
+                        const parsed = typeof s.setting_value === 'string' ? JSON.parse(s.setting_value) : s.setting_value;
+                        setCalculatorData(parsed);
                     } catch (e) {
                         console.error("Error parsing financialCalculatorData", e);
                     }
                 } else if (s.setting_key === 'financialCosts') {
                     try {
-                        setCosts(JSON.parse(s.setting_value));
+                        const parsed = typeof s.setting_value === 'string' ? JSON.parse(s.setting_value) : s.setting_value;
+                        setCosts(parsed);
                     } catch (e) {
                         console.error("Error parsing financialCosts", e);
                     }

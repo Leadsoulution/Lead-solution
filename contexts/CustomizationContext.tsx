@@ -125,6 +125,8 @@ export const CustomizationProvider: React.FC<{ children: ReactNode }> = ({ child
     commandeRetour: []
   });
 
+  const [isLoaded, setIsLoaded] = useState(false);
+
   // Load settings from API on mount
   useEffect(() => {
     const fetchSettings = async () => {
@@ -134,16 +136,16 @@ export const CustomizationProvider: React.FC<{ children: ReactNode }> = ({ child
             settings.forEach((s: Setting) => {
                 try {
                     if (s.setting_key === 'allStatusColors') {
-                        const parsed = JSON.parse(s.setting_value);
+                        const parsed = typeof s.setting_value === 'string' ? JSON.parse(s.setting_value) : s.setting_value;
                         setAllColors(deepMerge(DEFAULT_COLORS, parsed));
                     } else if (s.setting_key === 'allMessageTemplates') {
-                        const parsed = JSON.parse(s.setting_value);
+                        const parsed = typeof s.setting_value === 'string' ? JSON.parse(s.setting_value) : s.setting_value;
                         setMessageTemplates(deepMerge(DEFAULT_MESSAGE_TEMPLATES, parsed));
                     } else if (s.setting_key === 'appCurrency') {
                         setCurrency(s.setting_value as Currency);
                     } else if (s.setting_key === 'customStatuses') {
                         try {
-                            const parsed = JSON.parse(s.setting_value);
+                            const parsed = typeof s.setting_value === 'string' ? JSON.parse(s.setting_value) : s.setting_value;
                             if (typeof parsed === 'object' && parsed !== null) {
                                 setCustomStatuses(parsed);
                             }
@@ -160,20 +162,24 @@ export const CustomizationProvider: React.FC<{ children: ReactNode }> = ({ child
         }
       } catch (error) {
         console.error("Failed to fetch settings", error);
+      } finally {
+        setIsLoaded(true);
       }
     };
     fetchSettings();
   }, []);
 
   useEffect(() => {
+     if (!isLoaded) return;
      // Auto-save currency when it changes (debounced or immediate?)
      // For simplicity, we'll save immediately but handle errors silently
      api.updateSettings({ key: 'appCurrency', value: currency }).catch(console.error);
-  }, [currency]);
+  }, [currency, isLoaded]);
   
   useEffect(() => {
+     if (!isLoaded) return;
      api.updateSettings({ key: 'customStatuses', value: JSON.stringify(customStatuses) }).catch(console.error);
-  }, [customStatuses]);
+  }, [customStatuses, isLoaded]);
 
   const formatCurrency = (amount: number) => {
     const options: Intl.NumberFormatOptions = {

@@ -14,7 +14,6 @@ import { View, Role, Order, Product, Client, Platform, Statut, Ramassage, Livrai
 import { Menu, X } from 'lucide-react';
 import { CustomizationProvider } from './contexts/CustomizationContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { mockOrders, mockProducts, mockClients } from './services/mockData';
 import Integrations from './components/Integrations';
 import { IntegrationsProvider, useIntegrations } from './contexts/IntegrationsContext';
 import AIAnalysis from './components/AIAnalysis';
@@ -71,7 +70,6 @@ const AuthenticatedApp: React.FC = () => {
                   setOrders(fetchedOrders);
               } catch (e) {
                   console.error("Failed to fetch orders", e);
-                  if (showLoading && USE_MOCK_DATA) setOrders(JSON.parse(JSON.stringify(mockOrders)));
               }
 
               // Fetch Products
@@ -80,7 +78,6 @@ const AuthenticatedApp: React.FC = () => {
                   setProducts(fetchedProducts);
               } catch (e) {
                   console.error("Failed to fetch products", e);
-                  if (showLoading && USE_MOCK_DATA) setProducts(JSON.parse(JSON.stringify(mockProducts)));
               }
 
               // Fetch Clients
@@ -89,7 +86,6 @@ const AuthenticatedApp: React.FC = () => {
                   setClients(fetchedClients);
               } catch (e) {
                   console.error("Failed to fetch clients", e);
-                  if (showLoading && USE_MOCK_DATA) setClients(JSON.parse(JSON.stringify(mockClients)));
               }
           } finally {
               if (showLoading) setIsLoading(false);
@@ -132,96 +128,6 @@ const AuthenticatedApp: React.FC = () => {
     }
   }, [isDarkMode]);
   
-  // Effect to fetch live data when an integration is connected
-  useEffect(() => {
-    const fetchWooCommerceOrders = async () => {
-      // Only fetch if we haven't already fetched (simple check to avoid overwriting manual edits in this demo)
-      // In a real app, you would merge data based on IDs.
-      setIsLoading(true);
-      console.log('Simulating fetch from WooCommerce...');
-
-      // Simulate network delay
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
-      // Simulate external data containing SKU (Code Article)
-      const rawExternalOrders = [
-        {
-          id: 'LIVE-WC-001',
-          date: new Date().toISOString(),
-          customerName: 'John Doe (Live)',
-          customerPhone: '212611223344',
-          address: '1 Live Street, Casablanca',
-          sku: 'WH-001', // Example SKU matching local product
-          fallbackProduct: 'Wireless Headphones',
-          price: 150.00,
-        },
-        {
-          id: 'LIVE-WC-002',
-          date: new Date(Date.now() - 86400000).toISOString(),
-          customerName: 'Jane Smith (Live)',
-          customerPhone: '212655667788',
-          address: '2 Live Avenue, Rabat',
-          sku: 'SW-001',
-          fallbackProduct: 'Smartwatch',
-          price: 299.50,
-        },
-        {
-          id: 'LIVE-WC-003',
-          date: new Date(Date.now() - 172800000).toISOString(),
-          customerName: 'Sam Wilson (Live)',
-          customerPhone: '212612345678',
-          address: '3 Integration Lane, Marrakech',
-          sku: 'LW-001',
-          fallbackProduct: 'Leather Wallet',
-          price: 49.99,
-        },
-      ];
-
-      const liveOrders: Order[] = rawExternalOrders.map(raw => {
-          // Resolve Product by SKU (ID) first, then fallback to name
-          const matchedProduct = products.find(p => p.id === raw.sku);
-          
-          return {
-            id: raw.id,
-            date: raw.date,
-            customerName: raw.customerName,
-            customerPhone: raw.customerPhone,
-            address: raw.address,
-            // Use local name if SKU matched, otherwise use fallback name
-            product: matchedProduct ? matchedProduct.name : raw.fallbackProduct,
-            quantity: 1,
-            // Use local price if matched to ensure consistency, otherwise external price
-            price: matchedProduct ? matchedProduct.sellingPrice : raw.price,
-            statut: Statut.NonDefini,
-            assignedUserId: null,
-            noteClient: 'Imported from WooCommerce (SKU Match)',
-            ramassage: Ramassage.NonDefini,
-            livraison: Livraison.NonDefini,
-            remboursement: Remboursement.NonDefini,
-            commandeRetour: CommandeRetour.NonDefini,
-            platform: Platform.WooCommerce,
-            callCount: 0,
-          };
-      });
-      
-      // Merge live orders with existing orders, avoiding duplicates by ID
-      setOrders(prevOrders => {
-        const existingIds = new Set(prevOrders.map(o => o.id));
-        const newUniqueOrders = liveOrders.filter(o => !existingIds.has(o.id));
-        return [...newUniqueOrders, ...prevOrders];
-      });
-      setIsLoading(false);
-      console.log('Live WooCommerce orders loaded.');
-    };
-
-    if (integrations.WooCommerce.isConnected) {
-      fetchWooCommerceOrders();
-    } 
-    // Removed the else block that reset orders to mock data. 
-    // If disconnected, we keep the current local state.
-  }, [integrations.WooCommerce.isConnected, products]); // Added 'products' to dependency to ensure matching works if products change
-
-
   // Auto-create clients from orders if they don't exist
   useEffect(() => {
     const existingClientPhones = new Set(clients.map(c => c.phone));
