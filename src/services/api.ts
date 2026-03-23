@@ -21,7 +21,7 @@ export const api = {
         const stored = localStorage.getItem('orders');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/orders.php`);
+    const response = await fetch(`${API_BASE_URL}/orders.php?_t=${Date.now()}`);
     return handleResponse<Order[]>(response);
   },
 
@@ -78,7 +78,7 @@ export const api = {
         const stored = localStorage.getItem('products');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/products.php`);
+    const response = await fetch(`${API_BASE_URL}/products.php?_t=${Date.now()}`);
     return handleResponse<Product[]>(response);
   },
 
@@ -135,7 +135,7 @@ export const api = {
         const stored = localStorage.getItem('clients');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/clients.php`);
+    const response = await fetch(`${API_BASE_URL}/clients.php?_t=${Date.now()}`);
     return handleResponse<Client[]>(response);
   },
 
@@ -192,7 +192,7 @@ export const api = {
         const stored = localStorage.getItem('settings');
         return stored ? JSON.parse(stored) : {};
     }
-    const response = await fetch(`${API_BASE_URL}/settings.php`);
+    const response = await fetch(`${API_BASE_URL}/settings.php?_t=${Date.now()}`);
     return handleResponse<any>(response);
   },
 
@@ -236,7 +236,7 @@ export const api = {
           const stored = localStorage.getItem('users');
           return stored ? JSON.parse(stored) : [];
       }
-      const response = await fetch(`${API_BASE_URL}/users.php`);
+      const response = await fetch(`${API_BASE_URL}/users.php?_t=${Date.now()}`);
       const users = await handleResponse<any[]>(response);
       return users.map(u => ({
           ...u,
@@ -298,7 +298,7 @@ export const api = {
         const stored = localStorage.getItem('systemLogs');
         return stored ? JSON.parse(stored) : [];
     }
-    const response = await fetch(`${API_BASE_URL}/logs.php`);
+    const response = await fetch(`${API_BASE_URL}/logs.php?_t=${Date.now()}`);
     return handleResponse<LogEntry[]>(response);
   },
 

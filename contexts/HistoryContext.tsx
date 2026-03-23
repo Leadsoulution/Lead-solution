@@ -25,11 +25,21 @@ export const HistoryProvider: React.FC<{ children: ReactNode }> = ({ children })
     
     fetchLogs();
     
-    const intervalId = setInterval(() => {
-        fetchLogs();
-    }, 5000);
+    let timeoutId: NodeJS.Timeout;
+    let isFetching = false;
+    
+    const pollLogs = async () => {
+        if (!isFetching) {
+            isFetching = true;
+            await fetchLogs();
+            isFetching = false;
+        }
+        timeoutId = setTimeout(pollLogs, 5000);
+    };
+    
+    timeoutId = setTimeout(pollLogs, 5000);
 
-    return () => clearInterval(intervalId);
+    return () => clearTimeout(timeoutId);
   }, []);
 
   const addLog = async (entry: Omit<LogEntry, 'id' | 'timestamp'>) => {

@@ -54,6 +54,12 @@ const AuthenticatedApp: React.FC = () => {
 
   // Load Orders from API
   const [orders, setOrders] = useState<Order[]>([]);
+  const ordersRef = useRef<Order[]>([]);
+  
+  // Update ref whenever orders change
+  useEffect(() => {
+    ordersRef.current = orders;
+  }, [orders]);
   // Load Products from API
   const [products, setProducts] = useState<Product[]>([]);
   // Load Clients from API
@@ -67,7 +73,24 @@ const AuthenticatedApp: React.FC = () => {
               // Fetch Orders
               try {
                   const fetchedOrders = await api.getOrders();
-                  setOrders(fetchedOrders);
+                  setOrders(prev => {
+                      // Merge fetched orders with existing orders to prevent flashing
+                      // Keep any orders that are in prev but not yet in fetchedOrders ONLY IF they were just synced locally
+                      const fetchedIds = new Set(fetchedOrders.map(o => o.id));
+                      const newOrdersInPrev = prev.filter(o => !fetchedIds.has(o.id) && (o as any)._isNewLocal);
+                      
+                      // Also, if fetchedOrders has an order, but it's missing customerName (e.g. from PHP backend),
+                      // we should merge the fields from prev if they exist.
+                      const mergedFetchedOrders = fetchedOrders.map(fetchedOrder => {
+                          const existingOrder = prev.find(o => o.id === fetchedOrder.id);
+                          if (existingOrder) {
+                              return { ...existingOrder, ...fetchedOrder, customerName: fetchedOrder.customerName || existingOrder.customerName, customerPhone: fetchedOrder.customerPhone || existingOrder.customerPhone };
+                          }
+                          return fetchedOrder;
+                      });
+
+                      return [...newOrdersInPrev, ...mergedFetchedOrders];
+                  });
               } catch (e) {
                   console.error("Failed to fetch orders", e);
               }
@@ -96,11 +119,21 @@ const AuthenticatedApp: React.FC = () => {
       fetchData(true);
 
       // Poll every 5 seconds for real-time updates across browsers
-      const intervalId = setInterval(() => {
-          fetchData(false);
-      }, 5000);
+      let timeoutId: NodeJS.Timeout;
+      let isFetching = false;
 
-      return () => clearInterval(intervalId);
+      const pollData = async () => {
+          if (!isFetching) {
+              isFetching = true;
+              await fetchData(false);
+              isFetching = false;
+          }
+          timeoutId = setTimeout(pollData, 5000);
+      };
+
+      timeoutId = setTimeout(pollData, 5000);
+
+      return () => clearTimeout(timeoutId);
   }, []);
 
   const [isDarkMode, setIsDarkMode] = useState<boolean>(() => {
@@ -218,8 +251,7 @@ const AuthenticatedApp: React.FC = () => {
             },
             body: JSON.stringify({
                 storeUrl: settings.storeUrl,
-                apiKey: settings.apiKey,
-                apiSecret: settings.apiSecret
+                accessToken: settings.apiSecret === 'oauth-token' ? settings.apiKey : settings.apiSecret
             })
         });
         
@@ -379,21 +411,28 @@ const AuthenticatedApp: React.FC = () => {
     let newOrdersCount = 0;
     let errors: string[] = [];
 
+    const syncRunAddedIds = new Set<string>();
+
     const processSyncedOrders = async (syncedOrders: Order[]) => {
-        const newUniqueOrders: Order[] = [];
-        setOrders(prev => {
-            const existingIds = new Set(prev.map(o => o.id));
-            const unique = syncedOrders.filter(o => !existingIds.has(o.id));
-            unique.forEach(o => newUniqueOrders.push(o));
-            return [...unique, ...prev];
-        });
+        const existingIds = new Set(ordersRef.current.map(o => o.id));
+        const newUniqueOrders = syncedOrders.filter(o => !existingIds.has(o.id) && !syncRunAddedIds.has(o.id));
         
-        // Persist new orders
-        for (const order of newUniqueOrders) {
-            try {
-                await api.createOrder(order);
-            } catch (e) {
-                console.error(`Failed to persist synced order ${order.id}`, e);
+        if (newUniqueOrders.length > 0) {
+            newUniqueOrders.forEach(o => syncRunAddedIds.add(o.id));
+            
+            setOrders(prev => {
+                const prevIds = new Set(prev.map(o => o.id));
+                const trulyUnique = newUniqueOrders.filter(o => !prevIds.has(o.id)).map(o => ({...o, _isNewLocal: true}));
+                return [...trulyUnique, ...prev];
+            });
+            
+            // Persist new orders
+            for (const order of newUniqueOrders) {
+                try {
+                    await api.createOrder(order);
+                } catch (e) {
+                    console.error(`Failed to persist synced order ${order.id}`, e);
+                }
             }
         }
         return newUniqueOrders.length;
@@ -492,15 +531,30 @@ const AuthenticatedApp: React.FC = () => {
   };
 
   // Automatic Polling
+  const handleSyncOrdersRef = useRef(handleSyncOrders);
+  useEffect(() => {
+      handleSyncOrdersRef.current = handleSyncOrders;
+  });
+
   useEffect(() => {
     const isAnyConnected = integrations.WooCommerce.isConnected || integrations.Shopify.isConnected || integrations.YouCan.isConnected || integrations.GoogleSheets.isConnected;
     
     if (isAnyConnected) {
-        const intervalId = setInterval(() => {
-            handleSyncOrders(true); // Silent sync
-        }, 10000); // Poll every 10 seconds
+        let timeoutId: NodeJS.Timeout;
+        let isSyncing = false;
+        
+        const pollSync = async () => {
+            if (!isSyncing) {
+                isSyncing = true;
+                await handleSyncOrdersRef.current(true); // Silent sync
+                isSyncing = false;
+            }
+            timeoutId = setTimeout(pollSync, 10000);
+        };
 
-        return () => clearInterval(intervalId);
+        timeoutId = setTimeout(pollSync, 10000);
+
+        return () => clearTimeout(timeoutId);
     }
   }, [integrations]);
 
