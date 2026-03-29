@@ -73,7 +73,38 @@ db.exec(`
     oldValue TEXT,
     newValue TEXT
   );
+
+  CREATE TABLE IF NOT EXISTS delivery_companies (
+    id TEXT PRIMARY KEY,
+    name TEXT,
+    apiUrl TEXT,
+    apiKey TEXT,
+    status TEXT,
+    customFields TEXT,
+    isDefault INTEGER DEFAULT 0
+  );
 `);
+
+// Migration logic for delivery_companies (add isDefault column)
+try {
+  db.prepare('SELECT isDefault FROM delivery_companies LIMIT 1').get();
+} catch (e) {
+  console.log('Migrating delivery_companies table to add isDefault column...');
+  db.exec(`
+    ALTER TABLE delivery_companies ADD COLUMN isDefault INTEGER DEFAULT 0;
+  `);
+}
+
+// Migration logic for orders (add delivery columns)
+try {
+  db.prepare('SELECT deliveryCompanyId FROM orders LIMIT 1').get();
+} catch (e) {
+  console.log('Migrating orders table to add delivery columns...');
+  db.exec(`
+    ALTER TABLE orders ADD COLUMN deliveryCompanyId TEXT;
+    ALTER TABLE orders ADD COLUMN deliveryStatus TEXT;
+  `);
+}
 
 // Migration logic for orders
 try {
@@ -100,7 +131,9 @@ try {
       commandeRetour TEXT,
       platform TEXT,
       callCount INTEGER,
-      customFields TEXT
+      customFields TEXT,
+      deliveryCompanyId TEXT,
+      deliveryStatus TEXT
     );
   `);
 }

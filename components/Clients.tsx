@@ -242,12 +242,20 @@ const Clients: React.FC<ClientsProps> = ({ clients, setClients, orders }) => {
                             </tr>
                         </thead>
                         <tbody className="divide-y dark:divide-gray-700">
-                            {client.orders.map(order => {
+                            {[...client.orders].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(order => {
                             const statusColor = colors.statut[order.statut];
                             const textColor = colord(statusColor).isDark() ? 'text-white' : 'text-black';
                             return (
                                 <tr key={order.id} className="hover:bg-muted dark:hover:bg-dark-muted">
-                                <td className="p-2">{new Date(order.date).toLocaleDateString()}</td>
+                                <td className="p-2 text-xs">
+                                  {new Date(order.date).toLocaleString('fr-FR', { 
+                                    year: 'numeric', 
+                                    month: '2-digit', 
+                                    day: '2-digit', 
+                                    hour: '2-digit', 
+                                    minute: '2-digit' 
+                                  })}
+                                </td>
                                 <td className="p-2 font-medium">{order.product}</td>
                                 <td className="p-2 text-right">{formatCurrency(order.price)}</td>
                                 <td className="p-2">

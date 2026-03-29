@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product, Role } from '../types';
+import { Order, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, MessageCategory, MessageTemplate, Platform, Product, Role, DeliveryCompany } from '../types';
 import { Search, MessageSquare, Phone, XCircle, Filter, PlusCircle, Upload, Archive, CheckCircle, Trash2, RefreshCw } from 'lucide-react';
 import ColorSelector from './ColorSelector';
 import { useAuth } from '../contexts/AuthContext';
@@ -19,9 +19,10 @@ interface OrdersProps {
   products: Product[];
   setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
   onSync: () => void;
+  deliveryCompanies: DeliveryCompany[];
 }
 
-const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts, onSync }) => {
+const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProducts, onSync, deliveryCompanies }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const { users, currentUser } = useAuth();
   const { messageTemplates, formatCurrency, customStatuses } = useCustomization();
@@ -72,6 +73,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
     remboursement: '',
     commandeRetour: '',
     assignedUserId: '',
+    deliveryCompanyId: '',
     startDate: '',
     endDate: '',
   };
@@ -105,6 +107,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         if (filters.remboursement && order.remboursement !== filters.remboursement) return false;
         if (filters.commandeRetour && order.commandeRetour !== filters.commandeRetour) return false;
         if (filters.assignedUserId && order.assignedUserId !== filters.assignedUserId) return false;
+        if (filters.deliveryCompanyId && order.deliveryCompanyId !== filters.deliveryCompanyId) return false;
         if (filters.startDate && new Date(order.date) < new Date(filters.startDate + 'T00:00:00')) return false;
         if (filters.endDate && new Date(order.date) > new Date(filters.endDate + 'T23:59:59')) return false;
         return true;
@@ -113,7 +116,8 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.customerPhone.toLowerCase().includes(searchTerm.toLowerCase()) ||
         order.id.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+      )
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [orders, searchTerm, filters, selectedProductFilter, currentUser, products]);
   
     const handleSelectOrder = (orderId: string) => {
@@ -153,6 +157,48 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         (currentUser?.role === Role.User || currentUser?.role === Role.Confirmation)
     ) {
         updatedOrder.assignedUserId = currentUser.id;
+    }
+
+    // Auto-transfer to delivery company when confirmed
+    if (field === 'statut' && value === Statut.Confirme && updatedOrder.deliveryStatus !== 'Transféré') {
+        let targetCompany = deliveryCompanies.find(c => c.id === updatedOrder.deliveryCompanyId && c.status === 'active');
+        if (!targetCompany) {
+            targetCompany = deliveryCompanies.find(c => c.status === 'active');
+        }
+
+        if (targetCompany) {
+            updatedOrder.deliveryCompanyId = targetCompany.id;
+            updatedOrder.deliveryStatus = 'Transféré';
+            
+            // Trigger actual API call to the delivery company
+            if (targetCompany.apiUrl) {
+                fetch(targetCompany.apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${targetCompany.apiKey}`
+                    },
+                    body: JSON.stringify({
+                        orderId: updatedOrder.id,
+                        customerName: updatedOrder.customerName,
+                        customerPhone: updatedOrder.customerPhone,
+                        address: updatedOrder.address,
+                        product: updatedOrder.product,
+                        quantity: updatedOrder.quantity,
+                        price: updatedOrder.price,
+                        note: updatedOrder.noteClient
+                    })
+                }).then(res => {
+                    if (!res.ok) {
+                        console.error('Failed to transfer to delivery company API:', res.statusText);
+                    } else {
+                        console.log('Successfully transferred to delivery company API');
+                    }
+                }).catch(err => {
+                    console.error('Error transferring to delivery company API:', err);
+                });
+            }
+        }
     }
 
     // Apply optimistic update
@@ -539,7 +585,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       
       return [
         escapeCSV(order.id),
-        escapeCSV(new Date(order.date).toLocaleDateString('fr-FR')),
+        escapeCSV(new Date(order.date).toLocaleString('fr-FR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })),
         escapeCSV(order.customerName),
         escapeCSV(order.customerPhone),
         escapeCSV(order.address),
@@ -755,6 +801,17 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                           {users.map(u => <option key={u.id} value={u.id}>{u.username}</option>)}
                       </select>
                     </div>
+                    <div className="w-full">
+                       <select
+                          aria-label="Filtrer par société de livraison"
+                          value={filters.deliveryCompanyId}
+                          onChange={e => handleFilterChange('deliveryCompanyId', e.target.value)}
+                          className="w-full p-2 border rounded-md bg-card dark:bg-dark-card focus:ring-2 focus:ring-blue-500 text-sm"
+                        >
+                          <option value="">Toute Société</option>
+                          {deliveryCompanies.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select>
+                    </div>
                     
                      <button
                         onClick={resetFilters}
@@ -800,6 +857,8 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.status}`}>Ramassage</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Ramassage</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Livraison</th>
+                <th className={`p-2 border ${headerStyles.status}`}>Société de Livraison</th>
+                <th className={`p-2 border ${headerStyles.status}`}>Statut Livraison</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Remboursement</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Commande retour</th>
@@ -825,7 +884,15 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             aria-label={`Sélectionner la commande ${order.id}`}
                         />
                       </td>
-                      <td className="p-1 border min-w-[100px]">{new Date(order.date).toLocaleDateString('fr-FR')}</td>
+                      <td className="p-1 border min-w-[120px] text-xs">
+                        {new Date(order.date).toLocaleString('fr-FR', { 
+                          year: 'numeric', 
+                          month: '2-digit', 
+                          day: '2-digit', 
+                          hour: '2-digit', 
+                          minute: '2-digit' 
+                        })}
+                      </td>
                       <td className="p-1 border min-w-[150px]">{renderInput(order, 'customerName', 'Nom...', !isEditable)}</td>
                       <td className="p-1 border min-w-[120px]">{renderInput(order, 'customerPhone', 'Téléphone...', !isEditable)}</td>
                       <td className="p-1 border min-w-[200px]">{renderInput(order, 'address', 'Adresse...', !isEditable)}</td>
@@ -923,6 +990,23 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                             category="livraison"
                         />
                       </td>
+                      <td className="p-1 border min-w-[150px]">
+                        <select
+                            value={order.deliveryCompanyId || ''}
+                            onChange={(e) => handleUpdateOrder(order.id, 'deliveryCompanyId', e.target.value || null)}
+                            className="w-full p-1.5 border rounded-md bg-transparent focus:ring-1 focus:ring-blue-500 text-xs"
+                        >
+                            <option value="">-- Non assignée --</option>
+                            {deliveryCompanies.filter(c => c.status === 'active').map(c => (
+                                <option key={c.id} value={c.id}>
+                                    {c.name}
+                                </option>
+                            ))}
+                        </select>
+                      </td>
+                      <td className="p-1 border min-w-[120px]">
+                        {renderInput(order, 'deliveryStatus', 'Statut...', false)}
+                      </td>
                       <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'livraison')}</td>
                       <td className="p-1 border min-w-[120px]">
                         <ColorSelector
@@ -961,6 +1045,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
         onClose={() => setIsAddOrderModalOpen(false)}
         onAddOrder={handleAddOrder}
         products={products}
+        deliveryCompanies={deliveryCompanies}
       />
        <AddProductModal
         isOpen={isAddProductModalOpen}

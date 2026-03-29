@@ -1,4 +1,4 @@
-import { Order, Product, Client, User, LogEntry } from '../../types';
+import { Order, Product, Client, User, LogEntry, DeliveryCompany } from '../../types';
 import { API_BASE_URL, USE_MOCK_DATA } from '../config';
 
 // Helper to handle fetch responses
@@ -124,6 +124,69 @@ export const api = {
         return;
     }
     const response = await fetch(`${API_BASE_URL}/products.php?id=${id}`, {
+      method: 'DELETE',
+    });
+    await handleResponse(response);
+  },
+
+  // Delivery Companies
+  getDeliveryCompanies: async (): Promise<DeliveryCompany[]> => {
+    if (USE_MOCK_DATA) {
+        const stored = localStorage.getItem('delivery_companies');
+        return stored ? JSON.parse(stored) : [];
+    }
+    const response = await fetch(`${API_BASE_URL}/delivery-companies.php?_t=${Date.now()}`);
+    return handleResponse<DeliveryCompany[]>(response);
+  },
+
+  createDeliveryCompany: async (company: DeliveryCompany): Promise<DeliveryCompany> => {
+    if (USE_MOCK_DATA) {
+        const stored = localStorage.getItem('delivery_companies');
+        let companies = stored ? JSON.parse(stored) : [];
+        if (company.isDefault) {
+            companies = companies.map((c: DeliveryCompany) => ({ ...c, isDefault: false }));
+        }
+        companies.push(company);
+        localStorage.setItem('delivery_companies', JSON.stringify(companies));
+        return company;
+    }
+    const response = await fetch(`${API_BASE_URL}/delivery-companies.php`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(company),
+    });
+    await handleResponse(response);
+    return company;
+  },
+
+  updateDeliveryCompany: async (company: DeliveryCompany): Promise<void> => {
+    if (USE_MOCK_DATA) {
+        const stored = localStorage.getItem('delivery_companies');
+        let companies = stored ? JSON.parse(stored) : [];
+        if (company.isDefault) {
+            companies = companies.map((c: DeliveryCompany) => ({ ...c, isDefault: false }));
+        }
+        companies = companies.map((c: DeliveryCompany) => c.id === company.id ? company : c);
+        localStorage.setItem('delivery_companies', JSON.stringify(companies));
+        return;
+    }
+    const response = await fetch(`${API_BASE_URL}/delivery-companies.php`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(company),
+    });
+    await handleResponse(response);
+  },
+
+  deleteDeliveryCompany: async (id: string): Promise<void> => {
+    if (USE_MOCK_DATA) {
+        const stored = localStorage.getItem('delivery_companies');
+        let companies = stored ? JSON.parse(stored) : [];
+        companies = companies.filter((c: DeliveryCompany) => c.id !== id);
+        localStorage.setItem('delivery_companies', JSON.stringify(companies));
+        return;
+    }
+    const response = await fetch(`${API_BASE_URL}/delivery-companies.php?id=${id}`, {
       method: 'DELETE',
     });
     await handleResponse(response);

@@ -9,8 +9,9 @@ import Statistics from './components/Statistics';
 import AdminPanel from './components/AdminPanel';
 import Login from './components/Login';
 import Clients from './components/Clients';
+import DeliveryCompanies from './components/DeliveryCompanies';
 import Financials from './components/Financials';
-import { View, Role, Order, Product, Client, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, IntegrationSettings } from './types';
+import { View, Role, Order, Product, Client, DeliveryCompany, Platform, Statut, Ramassage, Livraison, Remboursement, CommandeRetour, IntegrationSettings, User } from './types';
 import { Menu, X } from 'lucide-react';
 import { CustomizationProvider } from './contexts/CustomizationContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -64,6 +65,8 @@ const AuthenticatedApp: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   // Load Clients from API
   const [clients, setClients] = useState<Client[]>([]);
+  // Load Delivery Companies from API
+  const [deliveryCompanies, setDeliveryCompanies] = useState<DeliveryCompany[]>([]);
 
   useEffect(() => {
       const fetchData = async (showLoading = true) => {
@@ -109,6 +112,14 @@ const AuthenticatedApp: React.FC = () => {
                   setClients(fetchedClients);
               } catch (e) {
                   console.error("Failed to fetch clients", e);
+              }
+
+              // Fetch Delivery Companies
+              try {
+                  const fetchedCompanies = await api.getDeliveryCompanies();
+                  setDeliveryCompanies(fetchedCompanies);
+              } catch (e) {
+                  console.error("Failed to fetch delivery companies", e);
               }
           } finally {
               if (showLoading) setIsLoading(false);
@@ -561,11 +572,13 @@ const AuthenticatedApp: React.FC = () => {
 
   const renderView = () => {
     const hasPermission = (viewToCheck: View) => {
+        if (currentUser?.role === Role.Admin) return true;
+        
         if (currentUser?.permissions && currentUser.permissions.length > 0) {
+            if (currentUser.permissions.includes('all' as any)) return true;
             return currentUser.permissions.includes(viewToCheck);
         }
         // Fallback logic matching Sidebar
-        if (currentUser?.role === Role.Admin) return true;
         if (currentUser?.role === Role.Confirmation) return viewToCheck === View.Orders;
         if (currentUser?.role === Role.User) {
              return [View.Dashboard, View.Products, View.Orders].includes(viewToCheck);
@@ -589,9 +602,11 @@ const AuthenticatedApp: React.FC = () => {
       case View.Products:
         return <Products orders={orders} products={products} setProducts={setProducts} />;
       case View.Orders:
-        return <Orders orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} onSync={handleSyncOrders} />;
+        return <Orders orders={orders} setOrders={setOrders} products={products} setProducts={setProducts} onSync={handleSyncOrders} deliveryCompanies={deliveryCompanies} />;
       case View.Clients:
         return <Clients clients={clients} setClients={setClients} orders={orders} />;
+      case View.DeliveryCompanies:
+        return <DeliveryCompanies companies={deliveryCompanies} setCompanies={setDeliveryCompanies} />;
       case View.Statistics:
         return <Statistics orders={orders} />;
       case View.AIAnalysis:

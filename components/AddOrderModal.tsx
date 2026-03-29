@@ -1,6 +1,6 @@
 
-import React, { useState } from 'react';
-import { Order, Product } from '../types';
+import React, { useState, useEffect } from 'react';
+import { Order, Product, DeliveryCompany } from '../types';
 import { X } from 'lucide-react';
 
 type NewOrderData = Omit<Order, 'id' | 'date' | 'platform' | 'statut' | 'ramassage' | 'livraison' | 'remboursement' | 'commandeRetour' | 'assignedUserId' | 'callCount'>;
@@ -10,9 +10,11 @@ interface AddOrderModalProps {
   onClose: () => void;
   onAddOrder: (order: NewOrderData) => void;
   products: Product[];
+  deliveryCompanies: DeliveryCompany[];
 }
 
-const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrder, products }) => {
+const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrder, products, deliveryCompanies }) => {
+  const defaultCompany = deliveryCompanies.find(c => c.isDefault && c.status === 'active') || deliveryCompanies.find(c => c.status === 'active');
   const initialFormState: NewOrderData = {
     customerName: '',
     customerPhone: '',
@@ -21,9 +23,17 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     quantity: 1,
     product: '',
     noteClient: '',
+    deliveryCompanyId: defaultCompany ? defaultCompany.id : '',
   };
   const [formData, setFormData] = useState<NewOrderData>(initialFormState);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+      setFormData(initialFormState);
+      setError('');
+    }
+  }, [isOpen, deliveryCompanies]);
 
   if (!isOpen) return null;
 
@@ -109,6 +119,22 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
           <div>
             <label className="block text-sm font-medium">Prix *</label>
             <input type="number" name="price" value={formData.price} onChange={handleChange} className="w-full mt-1 input-style" required min="0.01" step="0.01" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Société de livraison</label>
+            <select
+              name="deliveryCompanyId"
+              value={formData.deliveryCompanyId || ''}
+              onChange={handleChange}
+              className="w-full mt-1 input-style bg-transparent"
+            >
+              <option value="" className="dark:bg-gray-800">-- Non assignée --</option>
+              {deliveryCompanies.filter(c => c.status === 'active').map(c => (
+                <option key={c.id} value={c.id} className="dark:bg-gray-800">
+                  {c.name} {c.isDefault ? '(Par défaut)' : ''}
+                </option>
+              ))}
+            </select>
           </div>
           <div>
             <label className="block text-sm font-medium">Note du client</label>

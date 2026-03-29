@@ -46,6 +46,16 @@ export enum CommandeRetour {
   Bloquer = 'Bloquer',
 }
 
+export interface DeliveryCompany {
+  id: string;
+  name: string;
+  apiUrl: string;
+  apiKey: string;
+  status: 'active' | 'inactive';
+  isDefault?: boolean;
+  customFields?: Record<string, string>;
+}
+
 export interface Order {
   id: string;
   date: string;
@@ -65,6 +75,8 @@ export interface Order {
   platform: Platform;
   callCount: number;
   customFields?: Record<string, string>;
+  deliveryCompanyId?: string | null;
+  deliveryStatus?: string;
 }
 
 export interface Product {
@@ -101,6 +113,7 @@ export enum View {
     Financials = 'Financials',
     AIAnalysis = 'AIAnalysis',
     History = 'History',
+    DeliveryCompanies = 'DeliveryCompanies',
 }
 
 export interface StatCardProps {

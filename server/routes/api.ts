@@ -21,8 +21,12 @@ const asyncHandler = (fn: express.RequestHandler) => async (req: express.Request
 const prepareForDb = (obj: any) => {
   const result: any = {};
   for (const key in obj) {
-    if (typeof obj[key] === 'object' && obj[key] !== null) {
+    if (obj[key] === undefined) {
+      result[key] = null;
+    } else if (typeof obj[key] === 'object' && obj[key] !== null) {
       result[key] = JSON.stringify(obj[key]);
+    } else if (typeof obj[key] === 'boolean') {
+      result[key] = String(obj[key]);
     } else {
       result[key] = obj[key];
     }
@@ -72,6 +76,39 @@ router.put(['/orders/:id', '/orders.php'], asyncHandler(async (req, res) => {
 router.delete(['/orders/:id', '/orders.php'], asyncHandler(async (req, res) => {
   const id = req.params.id || req.query.id;
   db.prepare('DELETE FROM orders WHERE id = ?').run(id);
+  res.status(204).send();
+}));
+
+// --- Delivery Companies ---
+router.get(['/delivery-companies', '/delivery-companies.php'], asyncHandler(async (req, res) => {
+  const rows = db.prepare('SELECT * FROM delivery_companies').all();
+  res.json(rows.map(parseFromDb));
+}));
+
+router.post(['/delivery-companies', '/delivery-companies.php'], asyncHandler(async (req, res) => {
+  const company = prepareForDb(req.body);
+  const keys = Object.keys(company);
+  const values = Object.values(company);
+  const placeholders = keys.map(() => '?').join(', ');
+  
+  db.prepare(`INSERT INTO delivery_companies (${keys.join(', ')}) VALUES (${placeholders})`).run(...values);
+  res.status(201).json(req.body);
+}));
+
+router.put(['/delivery-companies/:id', '/delivery-companies.php'], asyncHandler(async (req, res) => {
+  const id = req.params.id || req.query.id || req.body.id;
+  const company = prepareForDb(req.body);
+  const keys = Object.keys(company);
+  const values = Object.values(company);
+  const setClause = keys.map(k => `${k} = ?`).join(', ');
+  
+  db.prepare(`UPDATE delivery_companies SET ${setClause} WHERE id = ?`).run(...values, id);
+  res.json(req.body);
+}));
+
+router.delete(['/delivery-companies/:id', '/delivery-companies.php'], asyncHandler(async (req, res) => {
+  const id = req.params.id || req.query.id;
+  db.prepare('DELETE FROM delivery_companies WHERE id = ?').run(id);
   res.status(204).send();
 }));
 
@@ -246,12 +283,8 @@ router.post(['/proxy_woocommerce.php', '/proxy/woocommerce'], asyncHandler(async
   const { storeUrl, apiKey, apiSecret } = req.body;
   if (!storeUrl || !apiKey || !apiSecret) return res.status(400).json({ error: 'Missing parameters' });
   
-  const url = `${storeUrl.replace(/\/$/, '')}/wp-json/wc/v3/orders`;
-  const response = await fetch(url, {
-    headers: {
-      'Authorization': 'Basic ' + Buffer.from(`${apiKey}:${apiSecret}`).toString('base64')
-    }
-  });
+  const url = `${storeUrl.replace(/\/$/, '')}/wp-json/wc/v3/orders?consumer_key=${encodeURIComponent(apiKey)}&consumer_secret=${encodeURIComponent(apiSecret)}`;
+  const response = await fetch(url);
   
   if (!response.ok) {
     const error = await response.text();
@@ -318,6 +351,43 @@ router.post(['/proxy_googlesheets.php', '/proxy/googlesheets'], asyncHandler(asy
   
   const data = await response.json();
   res.json(data);
+}));
+
+// --- Webhooks ---
+router.post('/webhooks/delivery/:companyId', asyncHandler(async (req, res) => {
+  const { companyId } = req.params;
+  const payload = req.body;
+  
+  console.log(`[Webhook] Received from company ${companyId}:`, payload);
+
+  // Try to find the order ID and status in the payload
+  // This is a generic approach since we don't know the exact payload structure
+  // Common fields: orderId, order_id, id, tracking_number, reference
+  // Common status fields: status, state, etat
+  
+  let orderId = payload.orderId || payload.order_id || payload.id || payload.reference || payload.tracking_number;
+  let newStatus = payload.status || payload.state || payload.etat;
+
+  if (orderId && newStatus) {
+    // Try to find the order in our database
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId);
+    
+    if (order) {
+      // Update the deliveryStatus
+      db.prepare('UPDATE orders SET deliveryStatus = ? WHERE id = ?').run(newStatus, order.id);
+      console.log(`[Webhook] Updated order ${order.id} deliveryStatus to ${newStatus}`);
+      
+      // Optionally map to our internal Livraison enum if it matches
+      // This would require a mapping configuration per company, but for now we just update deliveryStatus
+    } else {
+      console.log(`[Webhook] Order not found for ID: ${orderId}`);
+    }
+  } else {
+    console.log(`[Webhook] Could not extract orderId or status from payload`);
+  }
+
+  // Always respond with 200 OK to acknowledge receipt
+  res.status(200).json({ success: true, message: 'Webhook received' });
 }));
 
 export default router;

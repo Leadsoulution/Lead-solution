@@ -9,6 +9,7 @@ const AVAILABLE_VIEWS = [
   { id: View.Products, label: 'Products' },
   { id: View.Orders, label: 'Orders' },
   { id: View.Clients, label: 'Clients' },
+  { id: View.DeliveryCompanies, label: 'Sociétés de livraison' },
   { id: View.Statistics, label: 'Statistiques' },
   { id: View.AIAnalysis, label: 'AI Analysis' },
   { id: View.Settings, label: 'Settings' },

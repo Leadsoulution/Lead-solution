@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Role } from '../types';
 import ThemeToggle from './ThemeToggle';
-import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark, BrainCircuit, History } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Settings, Package2, BarChart3, Shield, LogOut, Package, ChevronLeft, ChevronRight, Link, Users, Landmark, BrainCircuit, History, Truck } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import Logo from './Logo';
 
@@ -29,16 +29,19 @@ const Sidebar: React.FC<SidebarProps> = ({ currentView, setView, isDarkMode, set
     { view: View.AdminPanel, icon: <Shield className="h-5 w-5" />, label: 'Admin Panel' },
     { view: View.Integrations, icon: <Link className="h-5 w-5" />, label: 'Integrations' },
     { view: View.Financials, icon: <Landmark className="h-5 w-5" />, label: 'Financials' },
+    { view: View.DeliveryCompanies, icon: <Truck className="h-5 w-5" />, label: 'Sociétés de livraison' },
     { view: View.History, icon: <History className="h-5 w-5" />, label: 'Historique' },
   ];
 
   const visibleNavItems = allNavItems.filter(item => {
+      if (currentUser?.role === Role.Admin) return true;
+      
       // If permissions are set, use them
       if (currentUser?.permissions && currentUser.permissions.length > 0) {
+          if (currentUser.permissions.includes('all' as any)) return true;
           return currentUser.permissions.includes(item.view);
       }
       // Fallback for backward compatibility or if permissions are missing
-      if (currentUser?.role === Role.Admin) return true;
       if (currentUser?.role === Role.Confirmation) return item.view === View.Orders;
       // Default for User: Dashboard, Products, Orders
       if (currentUser?.role === Role.User) {
