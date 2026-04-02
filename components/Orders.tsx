@@ -170,32 +170,31 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
             updatedOrder.deliveryCompanyId = targetCompany.id;
             updatedOrder.deliveryStatus = 'Transféré';
             
-            // Trigger actual API call to the delivery company
+            // Trigger actual API call to the delivery company via backend proxy
             if (targetCompany.apiUrl) {
-                fetch(targetCompany.apiUrl, {
+                fetch('/api/proxy/delivery', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${targetCompany.apiKey}`
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        orderId: updatedOrder.id,
-                        customerName: updatedOrder.customerName,
-                        customerPhone: updatedOrder.customerPhone,
-                        address: updatedOrder.address,
-                        product: updatedOrder.product,
-                        quantity: updatedOrder.quantity,
-                        price: updatedOrder.price,
-                        note: updatedOrder.noteClient
+                        company: targetCompany,
+                        order: updatedOrder
                     })
-                }).then(res => {
+                }).then(async res => {
                     if (!res.ok) {
                         console.error('Failed to transfer to delivery company API:', res.statusText);
+                        setNotification({ type: 'error', message: `Erreur d'envoi à ${targetCompany.name}` });
                     } else {
                         console.log('Successfully transferred to delivery company API');
+                        setNotification({ type: 'success', message: `Commande envoyée à ${targetCompany.name}` });
+                        // Refresh orders to get the tracking number
+                        const updatedOrders = await api.getOrders();
+                        setOrders(updatedOrders);
                     }
                 }).catch(err => {
                     console.error('Error transferring to delivery company API:', err);
+                    setNotification({ type: 'error', message: `Erreur d'envoi à ${targetCompany.name}` });
                 });
             }
         }
@@ -350,6 +349,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
       customerName: newOrderData.customerName,
       customerPhone: newOrderData.customerPhone,
       address: newOrderData.address,
+      city: newOrderData.city,
       price: newOrderData.price,
       quantity: newOrderData.quantity || 1,
       product: newOrderData.product,
@@ -845,6 +845,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.info}`}>Date</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Client</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Téléphone</th>
+                <th className={`p-2 border ${headerStyles.info}`}>Ville</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Adresse</th>
                 <th className={`p-2 border ${headerStyles.info}`}>PRODUIT</th>
                 <th className={`p-2 border ${headerStyles.info}`}>Quantité</th>
@@ -859,6 +860,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                 <th className={`p-2 border ${headerStyles.status}`}>Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Société de Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Statut Livraison</th>
+                <th className={`p-2 border ${headerStyles.status}`}>Code Suivi</th>
                 <th className={`p-2 border ${headerStyles.actions}`}>Message de Livraison</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Remboursement</th>
                 <th className={`p-2 border ${headerStyles.status}`}>Commande retour</th>
@@ -895,6 +897,7 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                       </td>
                       <td className="p-1 border min-w-[150px]">{renderInput(order, 'customerName', 'Nom...', !isEditable)}</td>
                       <td className="p-1 border min-w-[120px]">{renderInput(order, 'customerPhone', 'Téléphone...', !isEditable)}</td>
+                      <td className="p-1 border min-w-[120px]">{renderInput(order, 'city', 'Ville...', !isEditable)}</td>
                       <td className="p-1 border min-w-[200px]">{renderInput(order, 'address', 'Adresse...', !isEditable)}</td>
                       <td className="p-1 border min-w-[200px]">
                         <div className="flex items-center gap-2">
@@ -1006,6 +1009,17 @@ const Orders: React.FC<OrdersProps> = ({ orders, setOrders, products, setProduct
                       </td>
                       <td className="p-1 border min-w-[120px]">
                         {renderInput(order, 'deliveryStatus', 'Statut...', false)}
+                      </td>
+                      <td className="p-1 border min-w-[120px] text-center">
+                        {order.trackingNumber ? (
+                          <span className="font-mono bg-gray-100 dark:bg-gray-800 px-2 py-1 rounded">{order.trackingNumber}</span>
+                        ) : (order.deliveryCompanyId && order.statut === Statut.Confirme) ? (
+                          <span className="text-red-500 font-bold flex items-center justify-center gap-1" title="Erreur de création dans la société de livraison">
+                            <XCircle size={14} /> Erreur
+                          </span>
+                        ) : (
+                          <span className="text-gray-400">-</span>
+                        )}
                       </td>
                       <td className={`p-1 border min-w-[100px]`}>{renderActionButton(order, 'livraison')}</td>
                       <td className="p-1 border min-w-[120px]">

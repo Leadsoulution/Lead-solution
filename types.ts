@@ -51,8 +51,10 @@ export interface DeliveryCompany {
   name: string;
   apiUrl: string;
   apiKey: string;
+  apiSecret?: string;
   status: 'active' | 'inactive';
   isDefault?: boolean;
+  citiesMapping?: string;
   customFields?: Record<string, string>;
 }
 
@@ -62,6 +64,7 @@ export interface Order {
   customerName: string;
   customerPhone: string;
   address: string;
+  city?: string;
   price: number;
   quantity: number;
   product: string;
@@ -77,6 +80,7 @@ export interface Order {
   customFields?: Record<string, string>;
   deliveryCompanyId?: string | null;
   deliveryStatus?: string;
+  trackingNumber?: string | null;
 }
 
 export interface Product {

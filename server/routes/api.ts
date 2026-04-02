@@ -353,6 +353,156 @@ router.post(['/proxy_googlesheets.php', '/proxy/googlesheets'], asyncHandler(asy
   res.json(data);
 }));
 
+function getCityId(citiesMapping: string | null | undefined, cityName: string | undefined, defaultId: string = '1') {
+  if (!citiesMapping || !cityName) return defaultId;
+  try {
+    const cities = JSON.parse(citiesMapping);
+    const normalizedCityName = cityName.toLowerCase().trim();
+    for (const row of cities) {
+      const cityKey = Object.keys(row).find(k => k.toLowerCase().includes('city') || k.toLowerCase().includes('ville') || k.toLowerCase() === 'nom');
+      const idKey = Object.keys(row).find(k => k.toLowerCase() === 'id' || k.toLowerCase().includes('code') || k.toLowerCase().includes('district'));
+      
+      if (cityKey && idKey && String(row[cityKey]).toLowerCase().trim() === normalizedCityName) {
+        return String(row[idKey]);
+      }
+    }
+  } catch (e) {
+    console.error('Error parsing citiesMapping', e);
+  }
+  return defaultId;
+}
+
+router.post('/proxy/delivery', asyncHandler(async (req, res) => {
+  const { company, order } = req.body;
+  if (!company || !order) return res.status(400).json({ error: 'Missing parameters' });
+
+  if (company.apiUrl.includes('sendit.ma')) {
+    // Sendit integration
+    // Ensure the URL ends with /v1
+    let baseUrl = company.apiUrl.replace(/\/$/, '');
+    if (!baseUrl.endsWith('/v1')) {
+      baseUrl += '/v1';
+    }
+
+    // 1. Login
+    const loginRes = await fetch(`${baseUrl}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ public_key: company.apiKey, secret_key: company.apiSecret })
+    });
+    
+    if (!loginRes.ok) {
+      const error = await loginRes.text();
+      return res.status(loginRes.status).json({ error: 'Sendit login failed: ' + error });
+    }
+    
+    const loginData = await loginRes.json();
+    const token = loginData.data?.token;
+
+    if (!token) {
+      return res.status(500).json({ error: 'Sendit login failed: No token received' });
+    }
+
+    // 2. Create Colis
+    const cityId = getCityId(company.citiesMapping, order.city, '1');
+    const colisData = {
+      pickup_district_id: 1, // Usually fixed per sender, could be configured
+      district_id: parseInt(cityId) || 1, 
+      name: order.customerName,
+      amount: order.price,
+      address: order.address,
+      phone: order.customerPhone,
+      comment: order.noteClient,
+      reference: order.id,
+      allow_open: 1,
+      allow_try: 1,
+      products_from_stock: 0,
+      products: `${order.product}:${order.quantity}`
+    };
+
+    const createRes = await fetch(`${baseUrl}/deliveries`, {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(colisData)
+    });
+
+    if (!createRes.ok) {
+      const error = await createRes.text();
+      return res.status(createRes.status).json({ error: 'Sendit create failed: ' + error });
+    }
+
+    const createData = await createRes.json();
+    
+    // Update order with tracking info if available
+    if (createData.data && createData.data.code) {
+      db.prepare('UPDATE orders SET trackingNumber = ? WHERE id = ?').run(createData.data.code, order.id);
+    }
+
+    return res.json(createData);
+  } else if (company.apiUrl.includes('ameex.app')) {
+    // Ameex integration
+    const cityId = getCityId(company.citiesMapping, order.city, '1');
+    const formData = new FormData();
+    formData.append('type', 'SIMPLE');
+    formData.append('business', company.apiKey || ''); // API ID
+    formData.append('order_num', order.id);
+    formData.append('replace', 'true');
+    formData.append('open', 'YES');
+    formData.append('try', 'YES');
+    formData.append('fragile', '0');
+    formData.append('receiver', order.customerName || 'Client');
+    formData.append('phone', order.customerPhone || '');
+    formData.append('city', cityId); 
+    formData.append('address', order.address || '');
+    formData.append('comment', order.noteClient || '');
+    formData.append('product', order.product || '');
+    formData.append('cod', String(order.price || 0));
+
+    const createRes = await fetch(company.apiUrl, {
+      method: 'POST',
+      headers: {
+        'C-Api-Id': company.apiKey || '',
+        'C-Api-Key': company.apiSecret || ''
+      },
+      body: formData
+    });
+
+    if (!createRes.ok) {
+      const error = await createRes.text();
+      return res.status(createRes.status).json({ error: 'Ameex create failed: ' + error });
+    }
+
+    const createData = await createRes.json();
+    
+    // Update order with tracking info if available (assuming Ameex returns a tracking number, adjust if needed)
+    if (createData.tracking_number || createData.code) {
+      const tracking = createData.tracking_number || createData.code;
+      db.prepare('UPDATE orders SET trackingNumber = ? WHERE id = ?').run(tracking, order.id);
+    }
+
+    return res.json(createData);
+  } else {
+    // Generic fallback
+    const response = await fetch(company.apiUrl, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${company.apiKey}`
+        },
+        body: JSON.stringify(order)
+    });
+    if (!response.ok) {
+        const error = await response.text();
+        return res.status(response.status).json({ error });
+    }
+    const data = await response.json();
+    res.json(data);
+  }
+}));
+
 // --- Webhooks ---
 router.post('/webhooks/delivery/:companyId', asyncHandler(async (req, res) => {
   const { companyId } = req.params;

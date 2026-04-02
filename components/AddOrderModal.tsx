@@ -19,6 +19,7 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
     customerName: '',
     customerPhone: '',
     address: '',
+    city: '',
     price: 0,
     quantity: 1,
     product: '',
@@ -92,6 +93,10 @@ const AddOrderModal: React.FC<AddOrderModalProps> = ({ isOpen, onClose, onAddOrd
           <div>
             <label className="block text-sm font-medium">Téléphone</label>
             <input type="tel" name="customerPhone" value={formData.customerPhone} onChange={handleChange} className="w-full mt-1 input-style" />
+          </div>
+          <div>
+            <label className="block text-sm font-medium">Ville</label>
+            <input type="text" name="city" value={formData.city || ''} onChange={handleChange} className="w-full mt-1 input-style" />
           </div>
           <div>
             <label className="block text-sm font-medium">Adresse</label>

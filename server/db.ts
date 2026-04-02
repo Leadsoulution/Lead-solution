@@ -10,6 +10,7 @@ db.exec(`
     customerName TEXT,
     customerPhone TEXT,
     address TEXT,
+    city TEXT,
     price REAL,
     quantity INTEGER,
     product TEXT,
@@ -79,11 +80,23 @@ db.exec(`
     name TEXT,
     apiUrl TEXT,
     apiKey TEXT,
+    apiSecret TEXT,
     status TEXT,
     customFields TEXT,
-    isDefault INTEGER DEFAULT 0
+    isDefault INTEGER DEFAULT 0,
+    citiesMapping TEXT
   );
 `);
+
+// Migration logic for delivery_companies (add apiSecret column)
+try {
+  db.prepare('SELECT apiSecret FROM delivery_companies LIMIT 1').get();
+} catch (e) {
+  console.log('Migrating delivery_companies table to add apiSecret column...');
+  db.exec(`
+    ALTER TABLE delivery_companies ADD COLUMN apiSecret TEXT;
+  `);
+}
 
 // Migration logic for delivery_companies (add isDefault column)
 try {
@@ -95,6 +108,16 @@ try {
   `);
 }
 
+// Migration logic for delivery_companies (add citiesMapping column)
+try {
+  db.prepare('SELECT citiesMapping FROM delivery_companies LIMIT 1').get();
+} catch (e) {
+  console.log('Migrating delivery_companies table to add citiesMapping column...');
+  db.exec(`
+    ALTER TABLE delivery_companies ADD COLUMN citiesMapping TEXT;
+  `);
+}
+
 // Migration logic for orders (add delivery columns)
 try {
   db.prepare('SELECT deliveryCompanyId FROM orders LIMIT 1').get();
@@ -103,6 +126,26 @@ try {
   db.exec(`
     ALTER TABLE orders ADD COLUMN deliveryCompanyId TEXT;
     ALTER TABLE orders ADD COLUMN deliveryStatus TEXT;
+  `);
+}
+
+// Migration logic for orders (add trackingNumber)
+try {
+  db.prepare('SELECT trackingNumber FROM orders LIMIT 1').get();
+} catch (e) {
+  console.log('Migrating orders table to add trackingNumber column...');
+  db.exec(`
+    ALTER TABLE orders ADD COLUMN trackingNumber TEXT;
+  `);
+}
+
+// Migration logic for orders (add city)
+try {
+  db.prepare('SELECT city FROM orders LIMIT 1').get();
+} catch (e) {
+  console.log('Migrating orders table to add city column...');
+  db.exec(`
+    ALTER TABLE orders ADD COLUMN city TEXT;
   `);
 }
 
@@ -119,6 +162,7 @@ try {
       customerName TEXT,
       customerPhone TEXT,
       address TEXT,
+      city TEXT,
       price REAL,
       quantity INTEGER,
       product TEXT,
@@ -133,7 +177,8 @@ try {
       callCount INTEGER,
       customFields TEXT,
       deliveryCompanyId TEXT,
-      deliveryStatus TEXT
+      deliveryStatus TEXT,
+      trackingNumber TEXT
     );
   `);
 }
